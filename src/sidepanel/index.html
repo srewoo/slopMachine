@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SlopMachine</title>
+  <link rel="stylesheet" href="../ui/base.css">
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <header class="top">
+    <h1 class="visually-hidden">SlopMachine draft review</h1>
+    <p class="where"><span class="brand">SlopMachine</span> <span class="context" id="context"></span></p>
+    <button class="icon-btn" id="openSettings" type="button" aria-label="Settings" title="Settings">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 4.5h7M12 4.5h2M2 11.5h2M7 11.5h7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="10.5" cy="4.5" r="1.6" stroke="currentColor" stroke-width="1.4"/><circle cx="5.5" cy="11.5" r="1.6" stroke="currentColor" stroke-width="1.4"/></svg>
+    </button>
+  </header>
+
+  <main id="main">
+    <p class="visually-hidden" id="live" aria-live="polite"></p>
+
+    <section class="empty" id="empty" hidden>
+      <h2 id="emptyTitle"></h2>
+      <p class="muted" id="emptyBody"></p>
+      <button class="btn" id="emptyAction" type="button" hidden></button>
+    </section>
+
+    <div id="ready" hidden>
+      <p class="purpose-row cap">
+        <label for="purpose">Reviewing as</label>
+        <select id="purpose" class="purpose-select"></select>
+      </p>
+      <section class="score" aria-labelledby="scoreHeading">
+        <h2 class="visually-hidden" id="scoreHeading">Draft quality risk</h2>
+        <p class="cap score-label">Review score, lower is better</p>
+        <p class="score-line">
+          <span class="score-num num" id="scoreNum"></span><span class="score-of num">/100</span>
+          <span class="score-status" id="scoreStatus"></span>
+        </p>
+        <p class="summary" id="summary"></p>
+        <div class="bar" id="bar" aria-hidden="true"></div>
+        <p class="ai-overall" id="aiOverall" hidden></p>
+        <dl class="verdicts" id="verdicts" hidden></dl>
+        <p class="cap breakdown num" id="breakdown"></p>
+        <p class="cap num" id="meta"></p>
+        <div class="ai-line" id="aiLine" role="status" hidden>
+          <span class="ai-text" id="aiText"></span>
+          <button class="btn-quiet" id="aiAction" type="button" hidden></button>
+        </div>
+        <div class="note threshold" id="belowThreshold" hidden>
+          <span id="thresholdText"></span>
+          <button class="btn-quiet" id="thresholdFix" type="button" hidden>Show it from 25 words</button>
+        </div>
+        <p class="note" id="truncated" hidden>Only the first 12,000 characters were checked. Rewrite is off for drafts this long.</p>
+      </section>
+
+      <section class="proposal" id="proposal" aria-labelledby="proposalHeading" hidden>
+        <div class="section-head">
+          <h2 id="proposalHeading" tabindex="-1">Proposed change</h2>
+          <span class="cap num" id="diffStats"></span>
+        </div>
+        <p class="cap" id="proposalSource"></p>
+        <fieldset class="segmented" id="diffMode">
+          <legend class="visually-hidden">Show</legend>
+          <div class="seg-track">
+            <label><input type="radio" name="diffMode" value="changes" checked><span>Changes</span></label>
+            <label><input type="radio" name="diffMode" value="proposed"><span>New text</span></label>
+            <label><input type="radio" name="diffMode" value="original"><span>Original</span></label>
+          </div>
+        </fieldset>
+        <div class="diff" id="diff" role="region" aria-label="Proposed text" tabindex="0"></div>
+        <p class="cap" id="caveat">Generated text can be wrong. Read it before you apply.</p>
+        <div class="stale" id="stale" role="alert" hidden>
+          <p>Your draft changed after this was made, so it can't be applied safely.</p>
+          <button class="btn" id="regenerateStale" type="button">Regenerate</button>
+        </div>
+      </section>
+
+      <section class="issues" id="issuesSection" aria-labelledby="issuesHeading">
+        <div class="section-head">
+          <h2 id="issuesHeading">Before it goes out</h2>
+          <span class="cap num" id="issueCount"></span>
+        </div>
+        <ol class="issue-list" id="issues"></ol>
+        <p class="muted" id="noIssues" hidden>Nothing stands out. Read it once as the person receiving it, then send.</p>
+      </section>
+
+      <section class="rewrite" id="rewriteSection" aria-labelledby="rewriteHeading">
+        <div class="section-head"><h2 id="rewriteHeading">Rewrite</h2></div>
+        <div class="rewrite-controls" id="rewriteControls">
+        <fieldset class="segmented" id="tone">
+          <legend>Tone</legend>
+          <div class="seg-track">
+            <label><input type="radio" name="tone" value="direct" checked><span>Direct</span></label>
+            <label><input type="radio" name="tone" value="concise"><span>Concise</span></label>
+            <label><input type="radio" name="tone" value="conversational"><span>Conversational</span></label>
+            <label><input type="radio" name="tone" value="professional"><span>Professional</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="segmented" id="length">
+          <legend>Length</legend>
+          <div class="seg-track">
+            <label><input type="radio" name="length" value="shorter" checked><span>Shorter</span></label>
+            <label><input type="radio" name="length" value="same"><span>About the same</span></label>
+          </div>
+        </fieldset>
+        <label class="switch">
+          <input type="checkbox" role="switch" id="keepFacts" checked>
+          <span><span class="switch-label">Keep my facts</span><br><span class="cap">Tells the model not to add names, numbers or claims.</span></span>
+        </label>
+        </div>
+        <div class="engine">
+          <p class="engine-line"><span id="engineName"></span> <button class="btn-quiet" id="changeEngine" type="button">Change</button></p>
+          <p class="note" id="engineNote" hidden></p>
+        </div>
+        <div class="rewrite-actions" id="rewriteActions">
+          <button class="btn" id="rewriteBtn" type="button">Rewrite</button>
+          <button class="btn-quiet" id="cancelBtn" type="button" hidden>Cancel</button>
+          <span class="cap" id="rewriteStatus" role="status"></span>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-actions" id="footActions" hidden>
+      <button class="btn btn-primary" id="applyBtn" type="button" aria-describedby="stale">Apply to draft</button>
+      <button class="btn" id="copyBtn" type="button">Copy text</button>
+      <button class="btn-quiet" id="discardBtn" type="button">Discard</button>
+    </div>
+    <p class="cap foot-note" id="result" role="status"></p>
+    <p class="cap foot-privacy" id="privacy"></p>
+  </footer>
+
+  <dialog class="consent" id="consent" aria-labelledby="consentTitle" aria-describedby="consentBody">
+    <form method="dialog">
+      <h2 id="consentTitle"></h2>
+      <p id="consentBody"></p>
+      <dl class="consent-facts">
+        <dt>Endpoint</dt><dd id="consentEndpoint"></dd>
+        <dt>Model</dt><dd id="consentModel"></dd>
+        <dt>Sent</dt><dd id="consentSize" class="num"></dd>
+      </dl>
+      <details>
+        <summary>Show the text being sent</summary>
+        <pre id="consentText"></pre>
+      </details>
+      <p class="cap">Your key travels in the request header. Chrome's developer tools can show it.</p>
+      <label class="consent-remember"><input type="checkbox" id="consentRemember"> <span id="consentRememberLabel"></span></label>
+      <div class="consent-actions">
+        <button class="btn" value="cancel" autofocus>Cancel</button>
+        <button class="btn btn-primary" value="send" id="consentSend"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

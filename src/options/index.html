@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SlopMachine settings</title>
+  <link rel="stylesheet" href="../ui/base.css">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="layout">
+    <nav class="toc" aria-label="Settings sections">
+      <p class="brand">SlopMachine</p>
+      <a href="#sites">Sites</a>
+      <a href="#rules">Rules</a>
+      <a href="#providers">Rewrite engine</a>
+      <a href="#data">Your data</a>
+    </nav>
+
+    <main>
+      <h1>Settings</h1>
+      <p class="lede muted">Everything here stays in this browser. SlopMachine has no account, no server and no analytics.</p>
+      <p class="toast" id="status" role="status" aria-live="polite"></p>
+
+      <section id="sites" aria-labelledby="sitesHeading">
+        <h2 id="sitesHeading">Sites</h2>
+        <p class="muted">SlopMachine reads only the box you are typing in, and only on sites you turn on. Chrome asks you to confirm each one.</p>
+        <div class="rows" id="siteRows"></div>
+
+        <h3>Other sites <span class="tag">Experimental</span></h3>
+        <p class="muted">Works with plain text boxes on most sites. If a site's editor won't take an edit safely, you get Copy instead of Apply. Use <code>*.example.com</code> to cover a domain and all its subdomains.</p>
+        <form class="inline-form" id="genericForm">
+          <label class="field grow"><span>Site address</span><input class="input" id="genericOrigin" placeholder="example.com or *.example.com" inputmode="url" autocomplete="off"></label>
+          <button class="btn" type="submit">Add site</button>
+        </form>
+        <ul class="plain-list" id="genericList"></ul>
+
+        <label class="field"><span>Show the score on the toolbar icon once a draft has at least</span>
+          <input class="input num narrow-input" id="minWords" type="number" min="5" max="200" step="1">
+        <span class="cap">words in total. The whole draft is always checked, and the panel reviews drafts of any length.</span>
+        </label>
+      </section>
+
+      <section id="rules" aria-labelledby="rulesHeading">
+        <h2 id="rulesHeading">Rules</h2>
+        <p class="muted">Each rule is a style note, not a verdict. Turn off the ones that don't fit how you write.</p>
+        <div class="rows" id="ruleRows"></div>
+        <label class="field"><span>Never flag these phrases (one per line)</span><textarea class="input" id="allowList" spellcheck="false"></textarea></label>
+        <label class="field"><span>Also flag these phrases (one per line)</span><textarea class="input" id="customPhrases" spellcheck="false"></textarea></label>
+        <div><button class="btn" id="resetRules" type="button">Reset rules</button></div>
+      </section>
+
+      <section id="providers" aria-labelledby="providersHeading">
+        <h2 id="providersHeading">Rewrite engine</h2>
+        <p class="muted">Checking always happens on this device. A rewrite only runs when you press Rewrite, and only through the engine you pick here.</p>
+        <fieldset class="choices" id="providerChoices">
+          <legend class="visually-hidden">Engine</legend>
+          <label class="choice"><input type="radio" name="provider" value="none">
+            <span><strong>None</strong><span class="muted">Local fixes only. Nothing is ever sent.</span></span></label>
+          <label class="choice"><input type="radio" name="provider" value="builtin">
+            <span><strong>Chrome built-in AI</strong><span class="muted">Runs on this device. <span id="builtinState"></span></span></span></label>
+          <label class="choice"><input type="radio" name="provider" value="local">
+            <span><strong>Local model</strong><span class="muted">Ollama, LM Studio or anything OpenAI-compatible on localhost.</span></span></label>
+          <label class="choice"><input type="radio" name="provider" value="byok">
+            <span><strong>Your own API key</strong><span class="muted">OpenAI, Anthropic or Google. Drafts go straight to that provider after you confirm each one.</span></span></label>
+        </fieldset>
+
+        <label class="switch">
+          <input type="checkbox" role="switch" id="aiAuto">
+          <span><strong>Run the AI review when I open the panel</strong><br>
+            <span class="cap">The rule-based check always runs first. The AI review then looks for what rules can't see. It never sends a draft to a provider you haven't approved.</span></span>
+        </label>
+
+        <div class="panel" id="localPanel" hidden>
+          <label class="field"><span>Endpoint (must be localhost or 127.0.0.1)</span><input class="input" id="localUrl" autocomplete="off" spellcheck="false"></label>
+          <label class="field"><span>Model</span><input class="input" id="localModel" autocomplete="off" spellcheck="false"></label>
+          <p class="cap">Ollama blocks browser extensions by default. Start it with <code>OLLAMA_ORIGINS=chrome-extension://<span id="extId"></span></code>. In LM Studio, turn on CORS in the server settings.</p>
+          <p class="cap" id="localProbe"></p>
+          <div class="actions"><button class="btn" id="localTest" type="button">Allow access and test</button><button class="btn-quiet" id="localRevoke" type="button">Revoke access</button></div>
+          <p class="result" id="localResult" role="status"></p>
+        </div>
+
+        <div class="panel" id="byokPanel" hidden>
+          <fieldset class="segmented" id="vendorChoices">
+            <legend>Provider</legend>
+            <div class="seg-track">
+              <label><input type="radio" name="vendor" value="openai"><span>OpenAI</span></label>
+              <label><input type="radio" name="vendor" value="anthropic"><span>Anthropic</span></label>
+              <label><input type="radio" name="vendor" value="google"><span>Google</span></label>
+            </div>
+          </fieldset>
+          <label class="field"><span id="keyLabel">API key</span><input class="input" id="byokKey" type="password" autocomplete="off" spellcheck="false"></label>
+          <fieldset class="choices compact">
+            <legend class="cap">Keep the key</legend>
+            <label class="choice"><input type="radio" name="keyStore" value="session" checked><span>Until Chrome closes (recommended)</span></label>
+            <label class="choice"><input type="radio" name="keyStore" value="local"><span>On this device
+              <span class="muted">Stored unencrypted in this browser profile, out of reach of web pages. Anyone with access to this profile can read it.</span></span></label>
+          </fieldset>
+          <p class="cap" id="keyState"></p>
+          <label class="switch"><input type="checkbox" role="switch" id="askEachSend"><span id="askEachSendLabel"></span></label>
+          <div class="actions"><button class="btn" id="byokLoad" type="button">Save key and load models</button><button class="btn-quiet" id="byokForget" type="button">Forget key and access</button></div>
+          <p class="cap" id="byokProbe"></p>
+          <label class="field"><span>Model</span><select class="input" id="byokModel" disabled></select></label>
+          <p class="cap" id="modelNote"></p>
+          <p class="result" id="byokResult" role="status"></p>
+        </div>
+      </section>
+
+      <section id="data" aria-labelledby="dataHeading">
+        <h2 id="dataHeading">Your data</h2>
+        <p class="muted">Drafts are never stored. These controls cover settings and keys.</p>
+        <div class="rows">
+          <div class="row"><div><strong>Export settings</strong><p class="muted">Sites, rules and engine choice as a JSON file. Never includes drafts or keys.</p></div><button class="btn" id="exportBtn" type="button">Export</button></div>
+          <div class="row"><div><strong>Import settings</strong><p class="muted">Replaces your current settings with a file you exported.</p></div><label class="btn file-btn">Import<input type="file" id="importFile" accept="application/json,.json"></label></div>
+          <div class="row"><div><strong>Forget this session</strong><p class="muted">Clears the session-only key and anything held until Chrome closes.</p></div><button class="btn" id="clearSession" type="button">Forget</button></div>
+          <div class="row"><div><strong>Delete everything</strong><p class="muted">Removes all settings, saved keys and site access.</p></div><button class="btn danger" id="deleteAll" type="button">Delete</button></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

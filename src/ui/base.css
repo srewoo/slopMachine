@@ -1,0 +1,146 @@
+/* Shared tokens + controls for the side panel and options page.
+   Palette: calm editorial (moss / ochre / brick), every text pair checked for AA in both themes.
+   No webfonts: the PRD bans remote assets, and the system face matches Chrome's own UI. */
+:root {
+  color-scheme: light dark;
+  --bg: #fafaf8;
+  --surface: #eff1ee;
+  --raised: #ffffff;
+  --rule: #e2e5e1;
+  --ink: #1d211f;
+  --ink-2: #545c57;
+  --line: #7d857f;
+  --accent: #2f5d4a;
+  --accent-ink: #ffffff;
+  --accent-hover: #244a3a;
+  --low: #2c6a4c;
+  --review: #85540f;
+  --high: #a2372b;
+  --ins-ink: #1e3f2e;
+  --ins-bg: #d9ecdf;
+  --del-ink: #7a2b21;
+  --del-bg: #f7e0db;
+  --focus: #2b5c9c;
+
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fs-cap: 12px;
+  --fs-body: 14px;
+  --fs-head: 16px;
+  --fs-score: 32px;
+  --r-control: 6px;
+  --r-surface: 8px;
+  --t: 120ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1d1b;
+    --surface: #242826;
+    --raised: #363c39;
+    --rule: #2f3431;
+    --ink: #e6e9e5;
+    --ink-2: #a4ada7;
+    --line: #6b746e;
+    --accent: #8fc4a8;
+    --accent-ink: #0f1f17;
+    --accent-hover: #a6d3bb;
+    --low: #8fcba6;
+    --review: #e2b260;
+    --high: #f19a8d;
+    --ins-ink: #cfecd9;
+    --ins-bg: #22402f;
+    --del-ink: #f6c9c1;
+    --del-bg: #4b2420;
+    --focus: #8db6f0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --t: 0ms; }
+  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--bg);
+  font: var(--fs-body) / 1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, p { margin: 0; }
+h2 { font-size: var(--fs-head); font-weight: 600; letter-spacing: -0.01em; }
+button, input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.muted { color: var(--ink-2); }
+.cap { font-size: var(--fs-cap); color: var(--ink-2); }
+.num { font-variant-numeric: tabular-nums; }
+
+/* Buttons: one filled style, reserved for the action that changes the user's draft. */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 32px; padding: 5px 12px;
+  border: 1px solid var(--line); border-radius: var(--r-control);
+  background: transparent; cursor: pointer; font-weight: 550;
+  transition: background-color var(--t), border-color var(--t), color var(--t);
+}
+.btn:hover:not(:disabled) { background: var(--surface); }
+.btn:disabled { cursor: not-allowed; opacity: 0.55; }
+.btn-primary { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-quiet {
+  min-height: 32px; padding: 5px 6px; border: 0; background: none; cursor: pointer;
+  color: var(--ink-2); font-weight: 500; text-decoration: underline; text-decoration-color: transparent;
+  text-underline-offset: 3px; transition: color var(--t), text-decoration-color var(--t);
+}
+.btn-quiet:hover { color: var(--ink); text-decoration-color: currentColor; }
+
+/* Segmented radio group: native radios, so arrow keys and screen readers work for free. */
+.segmented { min-width: 0; margin: 0; padding: 0; border: 0; }
+.segmented legend { margin-bottom: 6px; padding: 0; font-size: var(--fs-cap); color: var(--ink-2); }
+.seg-track { display: flex; padding: 2px; border-radius: var(--r-surface); background: var(--surface); }
+.segmented label { position: relative; flex: 1; }
+.segmented input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.segmented span {
+  display: block; padding: 5px 6px; border: 1px solid transparent; border-radius: var(--r-control);
+  text-align: center; white-space: nowrap; color: var(--ink-2); font-weight: 500; transition: background-color var(--t), color var(--t);
+}
+.segmented input:checked + span { background: var(--raised); border-color: var(--rule); color: var(--ink); font-weight: 600; }
+.segmented input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+/* Switch */
+.switch { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.switch input {
+  appearance: none; flex: none; position: relative; width: 32px; height: 18px; margin: 2px 0 0;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--surface); cursor: pointer;
+  transition: background-color var(--t), border-color var(--t);
+}
+.switch input::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--ink-2); transition: transform var(--t), background-color var(--t);
+}
+.switch input:checked { background: var(--accent); border-color: var(--accent); }
+.switch input:checked::after { transform: translateX(14px); background: var(--accent-ink); }
+
+.field { display: grid; gap: 4px; }
+.field > span { font-size: var(--fs-cap); color: var(--ink-2); }
+.input {
+  width: 100%; min-height: 32px; padding: 5px 8px;
+  border: 1px solid var(--line); border-radius: var(--r-control); background: var(--bg);
+}
+textarea.input { min-height: 80px; resize: vertical; }
+
+@media (forced-colors: active) {
+  .btn-primary { border: 1px solid ButtonText; }
+  .segmented input:checked + span { border-color: Highlight; }
+}

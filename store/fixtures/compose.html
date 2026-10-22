@@ -1,0 +1,29 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>New message</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f4f4f2; --card: #fff; --ink: #1f2321; --ink-2: #636a66; --line: #e3e5e2; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #151816; --card: #1e2220; --ink: #e4e7e3; --ink-2: #9aa29d; --line: #2d322f; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .app { display: grid; grid-template-columns: 170px 1fr; min-height: 100vh; }
+  nav { padding: 24px 18px; color: var(--ink-2); font-size: 14px; }
+  nav b { display: block; margin-bottom: 18px; color: var(--ink); font-size: 16px; }
+  nav div { padding: 6px 0; }
+  main { padding: 28px 28px 28px 8px; }
+  .compose { border: 1px solid var(--line); border-radius: 10px; background: var(--card); box-shadow: 0 6px 24px rgb(0 0 0 / .06); }
+  .bar { padding: 12px 18px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 14px; }
+  .row { padding: 10px 18px; border-bottom: 1px solid var(--line); color: var(--ink-2); font-size: 14px; }
+  .row span { color: var(--ink); }
+  #body { min-height: 420px; padding: 18px; outline: none; white-space: pre-wrap; }
+</style>
+<div class="app">
+  <nav><b>Mail</b><div>Inbox</div><div>Drafts</div><div>Sent</div></nav>
+  <main>
+    <div class="compose">
+      <div class="bar">New message</div>
+      <div class="row">To <span>priya@northwind.example</span></div>
+      <div class="row">Subject <span>Quick idea for your SDR team</span></div>
+      <div id="body" contenteditable="true" role="textbox" aria-label="Message body"></div>
+    </div>
+  </main>
+</div>
