@@ -36,3 +36,14 @@ export function siteMatches(pattern: string, hostname: string): boolean {
   const domain = host.slice(2);
   return hostname === domain || hostname.endsWith(`.${domain}`);
 }
+
+/**
+ * What to suggest adding for an editor's frame. Hosts whose first label is generated per
+ * document (`<uuid>.frame.claudeusercontent.com`) get the parent wildcard, or the user would
+ * have to add every new document by hand. Any other host is suggested as is.
+ */
+export function suggestSitePattern(hostname: string): string | null {
+  const [first, ...rest] = hostname.split('.');
+  const generated = !!first && first.length >= 20 && /\d/.test(first) && rest.length >= 2;
+  return parseSitePattern(generated ? `*.${rest.join('.')}` : hostname);
+}

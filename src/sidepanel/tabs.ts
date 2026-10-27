@@ -5,8 +5,8 @@ interface Handlers {
   readonly tab: (id: number | null) => void;
   /** The tab finished loading. */
   readonly loaded: (id: number) => void;
-  /** A validated message from a content script, with its tab id. */
-  readonly broadcast: (msg: Broadcast, tabId: number) => void;
+  /** A validated message from a content script, with its tab and frame ids. */
+  readonly broadcast: (msg: Broadcast, tabId: number, frameId: number) => void;
 }
 
 /** Follows the active tab of the window this panel lives in, and relays content-script broadcasts. */
@@ -21,6 +21,6 @@ export function followActiveTab(on: Handlers): void {
   chrome.runtime.onMessage.addListener((raw, sender) => {
     if (sender.id !== chrome.runtime.id || sender.tab?.id === undefined) return;
     const msg = BroadcastSchema.safeParse(raw);
-    if (msg.success) on.broadcast(msg.data, sender.tab.id);
+    if (msg.success) on.broadcast(msg.data, sender.tab.id, sender.frameId ?? 0);
   });
 }

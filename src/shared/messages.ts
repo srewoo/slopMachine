@@ -39,10 +39,13 @@ export const BroadcastSchema = z.discriminatedUnion('type', [
     v: z.literal(1), type: z.literal('analysis/cleared'),
     reason: z.enum(['navigate', 'removed', 'blurred', 'unsupported', 'iframe']),
   }),
+  // A frame on an enabled site took focus, editor or not, so the panel can talk to it
+  // (e.g. "Review this page" on content Claude or another host renders in a frame).
+  z.object({ v: z.literal(1), type: z.literal('frame/active') }),
 ]);
 export type Broadcast = z.infer<typeof BroadcastSchema>;
 
-// Side panel → content script (tabs.sendMessage, frameId 0).
+// Side panel → content script (tabs.sendMessage, to the frame holding the editor; 0 by default).
 export const RequestSchema = z.discriminatedUnion('type', [
   z.object({ v: z.literal(1), type: z.literal('snapshot/get') }),
   z.object({ v: z.literal(1), type: z.literal('page/review') }),
@@ -55,7 +58,7 @@ export type Request = z.infer<typeof RequestSchema>;
 
 export const SnapshotSchema = z.discriminatedUnion('state', [
   z.object({ state: z.literal('none') }),
-  z.object({ state: z.literal('unsupported'), reason: z.enum(['iframe', 'readonly']) }),
+  z.object({ state: z.literal('unsupported'), reason: z.enum(['iframe', 'readonly']), host: z.optional(z.string()) }),
   z.object({
     state: z.literal('ready'),
     /** 'page': a read-only page review the user asked for; edits can only be copied. */
