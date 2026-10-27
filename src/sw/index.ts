@@ -25,6 +25,7 @@ chrome.runtime.onMessage.addListener((raw, sender, reply) => {
   if (tabId === undefined || !parsed.success) return false;
   const msg = parsed.data;
 
+  if (msg.type === 'frame/active') return false;
   if (msg.type === 'analysis/cleared' || !msg.eligible) {
     void clearBadge(tabId);
   } else {

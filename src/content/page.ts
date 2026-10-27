@@ -10,10 +10,19 @@ export const EXCLUDE = [
   '[role="navigation"]', '[role="banner"]', '[role="contentinfo"]', '[role="complementary"]', '[role="search"]', '[aria-hidden="true"]',
 ].join(', ');
 
-/** The candidate holding the most text; the body when a site marks up nothing. */
+/**
+ * The candidate with the most text we would actually read; the body when a site marks up
+ * nothing readable. Ranked by readPage, not textContent: a landmark full of scripts or
+ * hidden/excluded markup (Confluence) otherwise wins with nothing in it to review.
+ */
 export function pageRoot(doc: Document = document): HTMLElement {
-  const candidates = [...doc.querySelectorAll<HTMLElement>(ROOTS)];
-  return candidates.sort((a, b) => (b.textContent?.length ?? 0) - (a.textContent?.length ?? 0))[0] ?? doc.body;
+  let best = doc.body;
+  let most = 0;
+  for (const el of doc.querySelectorAll<HTMLElement>(ROOTS)) {
+    const n = readPage(el).text.trim().length;
+    if (n > most) [best, most] = [el, n];
+  }
+  return best;
 }
 
 export function readPage(root: HTMLElement): TextMap {

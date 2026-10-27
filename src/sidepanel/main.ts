@@ -4,6 +4,7 @@ import { ProviderError } from '../shared/providers.ts';
 import { DEFAULT_SETTINGS, loadSettings, onSettingsChanged, updateSettings, type Settings } from '../shared/settings.ts';
 import { applyFixes } from '../shared/fixes.ts';
 import { PURPOSES, type Purpose } from '../shared/prompt.ts';
+import { siteMatches, suggestSitePattern } from '../shared/sites.ts';
 import type { Fix, Issue } from '../shared/types.ts';
 import { createAiReview } from './ai.ts';
 import { engineStatus, readOptions, startRewrite } from './engine.ts';
@@ -23,6 +24,8 @@ interface Proposal {
 }
 
 let tabId: number | null = null;
+/** The frame whose editor the panel shows: the top page unless an editor in a frame spoke up. */
+let frameId = 0;
 let snap: Snapshot | null = null;
 let settings: Settings = DEFAULT_SETTINGS;
 let proposal: Proposal | null = null;
@@ -38,7 +41,7 @@ const result = (msg: string): void => void ($('result').textContent = msg);
 async function ask(msg: Request): Promise<unknown> {
   if (tabId === null) return null;
   try {
-    return await chrome.tabs.sendMessage(tabId, msg, { frameId: 0 });
+    return await chrome.tabs.sendMessage(tabId, msg, { frameId });
   } catch {
     return null; // no content script in this tab: not a site the user turned on
   }
@@ -54,7 +57,9 @@ async function reviewPage(): Promise<void> {
 }
 
 async function refresh(): Promise<void> {
+  const from = frameId;
   const parsed = SnapshotSchema.safeParse(await ask({ v: 1, type: 'snapshot/get' }));
+  if (from !== frameId) return; // another frame took over while we waited
   setSnapshot(parsed.success ? parsed.data : null);
 }
 
@@ -87,7 +92,13 @@ function render(): void {
       { label: 'Review this page', run: () => void reviewPage() },
     );
   } else if (snap.state === 'unsupported') {
-    showEmpty('This editor is not supported yet', 'It sits in a frame SlopMachine does not read. Your draft was not touched.');
+    const host = snap.host;
+    const site = host ? suggestSitePattern(host) : null;
+    const shown = site?.slice('https://'.length);
+    if (site && settings.genericOrigins.some((o) => siteMatches(o, host!))) {
+      showEmpty('Click inside it again', `SlopMachine is on for ${shown}. If you just added it, reload this tab first.`);
+    } else if (site) showEmpty('Turn on this editor\'s site', `It sits in a frame from ${shown}. Add it under Other sites, then reload this tab. Your draft was not touched.`, { label: `Add ${shown}`, run: () => openSettings(`?site=${encodeURIComponent(site)}#sites`) });
+    else showEmpty('This editor is not supported yet', 'It sits in a frame SlopMachine does not read. Your draft was not touched.');
   } else if (snap.analysis.wordCount === 0) {
     showEmpty('Start writing', 'The check runs as you type. Nothing leaves this device.');
   } else {
@@ -271,17 +282,34 @@ function wire(): void {
       ai.reset();
       job?.abort();
       tabId = id;
+      frameId = 0;
       proposal = null;
       result('');
       void refresh();
     },
-    loaded: (id) => id === tabId && void refresh(),
-    broadcast(msg, from) {
+    loaded(id) {
+      if (id !== tabId) return;
+      frameId = 0;
+      void refresh();
+    },
+    broadcast(msg, from, frame) {
       if (from !== tabId) return;
       if (msg.type === 'analysis/cleared') {
-        setSnapshot(msg.reason === 'iframe' ? { state: 'unsupported', reason: 'iframe' } : { state: 'none' });
+        // Another frame's editor going away (e.g. the top page blurring into a frame) is not ours.
+        if (frame !== frameId) return;
+        if (frame === 0 && msg.reason !== 'iframe') return setSnapshot({ state: 'none' });
+        frameId = 0;
+        void refresh(); // the top page knows whether focus moved into a frame we can't read
         return;
       }
+      if (frame !== frameId) {
+        // An editor or page in another frame (or back in the top page) took focus: follow it.
+        frameId = frame;
+        ai.reset();
+        proposal = null;
+        job?.abort();
+      }
+      if (msg.type === 'frame/active') return void refresh();
       $('scoreNum').closest('.score')?.classList.add('is-checking');
       window.clearTimeout(pending);
       pending = window.setTimeout(() => void refresh(), 60);

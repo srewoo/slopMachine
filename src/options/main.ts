@@ -170,6 +170,9 @@ async function main(): Promise<void> {
   settings = await loadSettings();
   render();
   wireSites();
+  // From the side panel's "Add <site>": prefilled only. Adding still takes the user's click and Chrome's prompt.
+  const suggested = parseSitePattern(new URLSearchParams(location.search).get('site') ?? '');
+  if (suggested) $<HTMLInputElement>('genericOrigin').value = suggested.slice('https://'.length);
   wireRules();
   wireData();
   const renderProviders = initProviders(() => settings, (s) => { settings = s; });

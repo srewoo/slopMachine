@@ -9,7 +9,17 @@ import * as session from './session.ts';
 const FLAG = '__slopMachineLoaded';
 const g = globalThis as unknown as Record<string, boolean>;
 
-if (!g[FLAG] && window.top === window) {
+/** Only https hosts: those are what the user can turn on under Other sites. */
+const frameHost = (f: HTMLIFrameElement): string => {
+  try {
+    const u = new URL(f.src);
+    return u.protocol === 'https:' ? u.hostname : '';
+  } catch {
+    return '';
+  }
+};
+
+if (!g[FLAG]) {
   g[FLAG] = true;
   start();
 }
@@ -36,7 +46,7 @@ function start(): void {
 
   const onFocus = (target: Element | null) => {
     if (!target) return;
-    if (target instanceof HTMLIFrameElement) return session.detach('iframe');
+    if (target instanceof HTMLIFrameElement) return session.detach('iframe', frameHost(target));
     const editor = adapter.resolve(target);
     if (editor) session.attach(editor);
   };
@@ -48,9 +58,11 @@ function start(): void {
     session.setSettings(s);
     onFocus(document.activeElement);
   });
+  window.addEventListener('focus', session.announceFrame);
   // Focus entering an iframe fires no focusin here; the parent window just blurs.
   window.addEventListener('blur', () => window.setTimeout(() => {
-    if (document.activeElement instanceof HTMLIFrameElement) session.detach('iframe');
+    const a = document.activeElement;
+    if (a instanceof HTMLIFrameElement) session.detach('iframe', frameHost(a));
   }, 0));
 
   // Focus moving to another element in this page clears the draft. The window losing focus

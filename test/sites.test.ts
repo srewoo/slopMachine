@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseSitePattern, siteMatches } from '../src/shared/sites.ts';
+import { parseSitePattern, siteMatches, suggestSitePattern } from '../src/shared/sites.ts';
 import { DEFAULT_SETTINGS, parseSettings } from '../src/shared/settings.ts';
 
 test('accepts domains, subdomains and wildcards in the forms people paste', () => {
@@ -34,4 +34,11 @@ test('wildcard covers the domain and every subdomain, exact host covers only its
 test('settings accept wildcard entries and keep existing exact ones valid', () => {
   assert.ok(parseSettings({ ...DEFAULT_SETTINGS, genericOrigins: ['https://www.google.com', 'https://*.mindtickle.com'] }));
   assert.equal(parseSettings({ ...DEFAULT_SETTINGS, genericOrigins: ['https://*.com'] }), null);
+});
+
+test('suggests a wildcard for per-document frame hosts, the host itself otherwise', () => {
+  assert.equal(suggestSitePattern('22977ec8-b0d5-414c-8e03-c3c89e637ab6.frame.claudeusercontent.com'), 'https://*.frame.claudeusercontent.com');
+  assert.equal(suggestSitePattern('docs.google.com'), 'https://docs.google.com');
+  assert.equal(suggestSitePattern('a1b2c3d4e5f6a7b8c9d0e1.com'), 'https://a1b2c3d4e5f6a7b8c9d0e1.com', 'never a wildcard over a TLD');
+  assert.equal(suggestSitePattern(''), null);
 });

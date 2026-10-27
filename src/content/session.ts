@@ -39,7 +39,8 @@ interface PageReview {
 let page: PageReview | null = null;
 /** False until settings load, and whenever the user turns this site off: then we read nothing. */
 let enabled = false;
-let unsupported: 'iframe' | null = null;
+/** Set when focus went into a frame we are not running in; its host, so the panel can name it. */
+let unsupported: { host: string } | null = null;
 let settings: Settings = DEFAULT_SETTINGS;
 let adapter: Adapter;
 
@@ -88,7 +89,12 @@ export function attach(el: Editor): void {
   refresh(current);
 }
 
-export function detach(reason: 'navigate' | 'removed' | 'blurred' | 'iframe'): void {
+/** This frame took focus: tell the panel, only if this site is on. Carries no text. */
+export function announceFrame(): void {
+  if (enabled && window.top !== window) send({ v: 1, type: 'frame/active' });
+}
+
+export function detach(reason: 'navigate' | 'removed' | 'blurred' | 'iframe', frameHost = ''): void {
   if (reason === 'navigate' || reason === 'removed') {
     const hadPage = !!page;
     page = null;
@@ -96,7 +102,7 @@ export function detach(reason: 'navigate' | 'removed' | 'blurred' | 'iframe'): v
   }
   if (!current && reason !== 'iframe') return;
   current = null;
-  unsupported = reason === 'iframe' ? 'iframe' : null;
+  unsupported = reason === 'iframe' ? { host: frameHost } : null;
   send({ v: 1, type: 'analysis/cleared', reason });
 }
 
@@ -160,7 +166,7 @@ export function reviewPage(): void {
 
 export function snapshot(): Snapshot {
   if (!enabled) return { state: 'none' };
-  if (unsupported) return { state: 'unsupported', reason: unsupported };
+  if (unsupported) return { state: 'unsupported', reason: 'iframe', ...(unsupported.host && { host: unsupported.host }) };
   if (!current && page?.root.isConnected) {
     const p = page;
     refreshPage(p);

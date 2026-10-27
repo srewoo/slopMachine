@@ -18,6 +18,8 @@ const panelReady = () => panel.waitForFunction(() => document.getElementById('re
 before(async () => {
   execSync('node build.mjs', { env: { ...process.env, E2E: '1' }, stdio: 'ignore' });
   server = http.createServer((q, r) => {
+    if (q.url?.startsWith('/artifact')) return r.writeHead(200, { 'content-type': 'text/html' }).end('<p>Viewer chrome</p><iframe sandbox="allow-scripts" src="/article" width="700" height="400"></iframe>');
+    if (q.url?.startsWith('/framed')) return r.writeHead(200, { 'content-type': 'text/html' }).end('<iframe src="/compose" width="700" height="400"></iframe>');
     const file = q.url?.startsWith('/article') ? 'article.html' : 'compose.html';
     r.writeHead(200, { 'content-type': 'text/html' }).end(readFileSync(`test/fixtures/${file}`));
   });
@@ -27,7 +29,7 @@ before(async () => {
   ctx = await chromium.launchPersistentContext('', { channel: 'chromium', headless: true, args: [`--disable-extensions-except=${dist}`, `--load-extension=${dist}`] });
   sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'));
   const id = new URL(sw.url()).host;
-  await sw.evaluate(() => chrome.scripting.registerContentScripts([{ id: 'e2e', matches: ['http://127.0.0.1/*'], js: ['content.js'] }]));
+  await sw.evaluate(() => chrome.scripting.registerContentScripts([{ id: 'e2e', matches: ['http://127.0.0.1/*'], js: ['content.js'], allFrames: true }]));
   panel = await ctx.newPage();
   await panel.goto(`chrome-extension://${id}/sidepanel/index.html`);
   [page] = await Promise.all([ctx.waitForEvent('page'), panel.evaluate((u) => chrome.tabs.create({ url: u }), `${base}/article`)]);
@@ -50,7 +52,7 @@ test('review reads the article only: no nav, header, sidebar, footer or hidden t
   const snap = await snapshot();
   assert.equal(snap.mode, 'page');
   assert.equal(snap.canApply, false);
-  for (const m of ['NAVMARKER', 'HEADERMARKER', 'ASIDEMARKER', 'FOOTERMARKER', 'HIDDENMARKER', 'CSSHIDDENMARKER']) assert.ok(!snap.text.includes(m), m);
+  for (const m of ['SCRIPTMARKER', 'NAVMARKER', 'HEADERMARKER', 'ASIDEMARKER', 'FOOTERMARKER', 'HIDDENMARKER', 'CSSHIDDENMARKER']) assert.ok(!snap.text.includes(m), m);
   assert.match(snap.text, /Workflow Today/, 'table cells stay separate words');
   const rules = snap.analysis.issues.map((i) => i.ruleId);
   assert.ok(rules.includes('placeholder') && rules.includes('phrase'), rules.join());
@@ -68,7 +70,7 @@ test('the AI page check gets a structured outline of the article only', async ()
   assert.match(r.outline, /^# Coming soon: a separate module type$/m);
   assert.match(r.outline, /^\| Workflow \| Today \|$/m);
   assert.match(r.outline, /^\| Create \| Admins create it as a Mission\. \|$/m);
-  for (const m of ['NAVMARKER', 'ASIDEMARKER', 'FOOTERMARKER', 'HIDDENMARKER', 'CSSHIDDENMARKER']) assert.ok(!r.outline.includes(m), m);
+  for (const m of ['SCRIPTMARKER', 'NAVMARKER', 'ASIDEMARKER', 'FOOTERMARKER', 'HIDDENMARKER', 'CSSHIDDENMARKER']) assert.ok(!r.outline.includes(m), m);
   const stale = await sw.evaluate(async () => {
     const [t] = await chrome.tabs.query({ url: 'http://127.0.0.1/*' });
     return chrome.tabs.sendMessage(t.id, { v: 1, type: 'page/outline', revision: 'old', max: 40000 }, { frameId: 0 });
@@ -105,4 +107,24 @@ test('navigating away ends the review', async () => {
   await page.goto(`${base}/other`);
   await panel.waitForFunction(() => document.getElementById('ready')?.hidden === true);
   assert.deepEqual(await snapshot(), { state: 'none' });
+});
+
+test('an editor inside a frame of an enabled site is checked in the panel', async () => {
+  await page.goto(`${base}/framed`);
+  const frame = page.frameLocator('iframe');
+  await frame.locator('#plain').click();
+  await frame.locator('#plain').pressSequentially('Hi {{first_name}}, we leverage data to help teams write first emails that sound like them, not a template.');
+  await panelReady();
+  assert.match(await panel.textContent('#context'), /127\.0\.0\.1 · draft/);
+});
+
+test('clicking into a sandboxed frame lets the user review that frame\'s page', async () => {
+  await page.goto(`${base}/artifact`);
+  await panel.waitForFunction(() => document.getElementById('ready')?.hidden === true);
+  await page.frameLocator('iframe').locator('article p').first().click();
+  await panel.waitForFunction(() => document.getElementById('emptyAction')?.textContent === 'Review this page');
+  await panel.click('#emptyAction');
+  await panelReady();
+  assert.match(await panel.textContent('#context'), /127\.0\.0\.1 · page/);
+  assert.ok(await panel.locator('.snippet').count() > 0, 'the framed article was read');
 });
