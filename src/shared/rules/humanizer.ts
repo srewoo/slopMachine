@@ -41,8 +41,15 @@ export const TELLS: readonly TellPattern[] = [
     message: 'The “not” half argues with something nobody said, to make the second half sound bigger. State the point.',
   },
   {
+    // The bare form ("It's not the model. It's the eval.") is also how people correct a fact, so it needs company.
+    ruleId: 'not-x-but-y', family: 'staging', severity: 'warning', base: 8, weak: true,
+    re: /\b(?:isn'?t|aren'?t|wasn'?t|weren'?t|is not|are not|it'?s not)\b[^.!?\n,;]{1,40}[.,;—–]\s*(?:it'?s|it is|they'?re|they are|that'?s)\b/gi,
+    title: 'Say it directly instead of “not X, but Y”',
+    message: 'The “not” half argues with something nobody said, to make the second half sound bigger. State the point.',
+  },
+  {
     ruleId: 'closer', family: 'staging', severity: 'warning', base: 8,
-    re: /\b(?:that'?s|that is|this is) the real (?:win|story|point|lesson|difference)\b|\b(?:that|this) distinction matters\b|\bread that again\b|\blet that sink in\b|\bthe message was clear\b|\bthis (?:shows|highlights|underscores|demonstrates) the importance of\b|\bit was a lesson in\b|\bmake no mistake\b|\b(?:[a-z]{3,}\.\s+){2,}[a-z]{3,}\./gi,
+    re: /\b(?:that'?s|that is|this is) the real (?:win|story|point|lesson|difference)\b|\b(?:that|this) distinction matters\b|\bread that again\b|\blet that sink in\b|\bthe message was clear\b|\bthis (?:shows|highlights|underscores|demonstrates) the importance of\b|\bit was a lesson in\b|\bmake no mistake\b|\bthat'?s the whole (?:thing|point|trick|secret|story)\b|\b(?:that|this) (?:last )?(?:part|point|bit|detail) matters\b|\bmatters more than (?:it sounds|you(?:'d)? think)\b|\bthe key (?:point|takeaway|insight) (?:here )?is\b|\b(?:[a-z]{3,}\.\s+){2,}[a-z]{3,}\./gi,
     title: 'Cut the dramatic closer',
     message: 'A closing line that restates the point asks the reader to pause instead of telling them something new.',
     fix: 'sentence', fixLabel: 'Cut the line',
@@ -56,10 +63,32 @@ export const TELLS: readonly TellPattern[] = [
   },
   {
     ruleId: 'run-up', family: 'staging', severity: 'warning', base: 8,
-    re: /\b(?:let'?s dive in|let'?s explore|let'?s break (?:this|it) down|here'?s what you need to know|now,? let'?s (?:look at|talk about)|without further ado|heads up|quick note|here'?s the thing|the thing is|let'?s be honest|real talk)\b[:,.!]?|(?<=^|[.!?]\s+)(?:Honestly\?|Look,)/gim,
+    re: /\b(?:let'?s dive in|let'?s explore|let'?s break (?:this|it) down|here'?s what you need to know|now,? let'?s (?:look at|talk about)|without further ado|heads up|quick note|here'?s the thing|the thing is|let'?s be honest|let me be (?:clear|honest|blunt)|i'?ll be honest|here'?s what i mean|real talk)\b[:,.!]?|(?<=^|[.!?]\s+)(?:Honestly\?|Look,)/gim,
     title: 'Skip the run-up and make the point',
     message: 'The sentence announces the point, or stages candor, instead of making the point.',
     fix: 'cut', fixLabel: 'Cut it',
+  },
+  // Faux-insight, colon reveals and rhetorical setups: adapted from petergyang/no-ai-slop (MIT).
+  {
+    ruleId: 'faux-insight', family: 'staging', severity: 'warning', base: 8,
+    re: /\b(?:(?:here'?s )?what (?:nobody|no one|most people|everyone|few people) (?:tells? you|talks? about|gets? wrong|miss(?:es)?|forgets?|overlooks?|realizes?|knows?)|(?:this is )?the part (?:everyone|most people|nobody|no one) (?:miss(?:es)?|skips?|gets? wrong|overlooks?|forgets?)|the (?:secret|truth|thing) (?:nobody|no one) (?:tells you|talks about|wants to admit)|(?:most|few) people (?:don'?t|never) realize|the uncomfortable truth(?: is)?)\b(?:\s*:)?/gi,
+    title: 'Cut the “what nobody tells you” setup',
+    message: 'It casts the writer as the lone expert instead of making the claim. Let the claim stand on its own.',
+    fix: (m) => (/:$/.test(m) ? '' : null), fixLabel: 'Cut the setup',
+  },
+  {
+    ruleId: 'colon-reveal', family: 'staging', severity: 'warning', base: 6, only: ['outreach', 'marketing', 'content'],
+    re: /(?<=^|[.!?]\s+)(?:(?:And|But) )?(?:The|This|My|Our|Your|One|Here'?s the) (?:[\w'-]+ ){0,4}(?:part|thing|kicker|twist|catch|secret|detail|trick|difference|result|answer|lesson|takeaway|best|worst|bottom line|point|reason|problem|irony|truth)(?: [\w'-]+){0,5}: (?=[a-z])/gim,
+    title: 'Turn the colon reveal into a sentence',
+    message: 'A noun phrase, a colon, then a dramatic reveal. Say it as a plain sentence; keep colons for lists, labels and quotes.',
+    fix: 'cut', fixLabel: 'Cut the setup',
+  },
+  {
+    ruleId: 'rhetorical-setup', family: 'staging', severity: 'warning', base: 6,
+    re: /(?<=^|[.!?]\s+)(?:(?:and|but|so|now) )?(?:what if i told you|plot twist|think about (?:it|that)|picture this|imagine this|guess what|spoiler(?: alert)?|here'?s the (?:kicker|catch|twist))\b[:?!.]?|(?<=^|[.!?]\s+)(?:(?:And|But|So) )?(?:the|my) (?:result|answer|catch|kicker|twist|outcome|verdict|best part|lesson)\?/gim,
+    title: 'Drop the rhetorical setup',
+    message: 'A teaser or a question the text answers itself, staged for suspense. Make the point.',
+    fix: (m) => (/[:?!.]$/.test(m) ? '' : null), fixLabel: 'Cut it',
   },
   {
     ruleId: 'strawman', family: 'staging', severity: 'warning', base: 6,

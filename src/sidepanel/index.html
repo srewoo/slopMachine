@@ -23,6 +23,8 @@
       <h2 id="emptyTitle"></h2>
       <p class="muted" id="emptyBody"></p>
       <button class="btn" id="emptyAction" type="button" hidden></button>
+      <p class="empty-more" id="emptyMore" hidden></p>
+      <input type="file" id="pdfFile" accept="application/pdf,.pdf" hidden>
     </section>
 
     <div id="ready" hidden>
@@ -31,27 +33,48 @@
         <select id="purpose" class="purpose-select"></select>
       </p>
       <section class="score" aria-labelledby="scoreHeading">
-        <h2 class="visually-hidden" id="scoreHeading">Draft quality risk</h2>
-        <p class="cap score-label">Review score, lower is better</p>
+        <div class="section-head"><h2 id="scoreHeading">Writing quality check</h2></div>
+        <p class="cap score-label">How much needs fixing before it goes out, checked by the rules in Settings. Lower is better.</p>
         <p class="score-line">
           <span class="score-num num" id="scoreNum"></span><span class="score-of num">/100</span>
           <span class="score-status" id="scoreStatus"></span>
         </p>
         <p class="summary" id="summary"></p>
         <div class="bar" id="bar" aria-hidden="true"></div>
-        <p class="ai-overall" id="aiOverall" hidden></p>
-        <dl class="verdicts" id="verdicts" hidden></dl>
-        <p class="cap breakdown num" id="breakdown"></p>
+        <ul class="checks" id="checks" aria-label="Checks"></ul>
         <p class="cap num" id="meta"></p>
         <div class="ai-line" id="aiLine" role="status" hidden>
           <span class="ai-text" id="aiText"></span>
           <button class="btn-quiet" id="aiAction" type="button" hidden></button>
         </div>
+        <p class="ai-overall" id="aiOverall" hidden></p>
+        <dl class="verdicts" id="verdicts" hidden></dl>
         <div class="note threshold" id="belowThreshold" hidden>
           <span id="thresholdText"></span>
           <button class="btn-quiet" id="thresholdFix" type="button" hidden>Show it from 25 words</button>
         </div>
         <p class="note" id="truncated" hidden>Only the first 12,000 characters were checked. Rewrite is off for drafts this long.</p>
+      </section>
+
+      <section class="authorship" id="authorship" aria-labelledby="authorshipHeading" hidden>
+        <div class="section-head"><h2 id="authorshipHeading">AI-writing check</h2></div>
+        <p class="cap score-label">How much this reads like it came from an AI chatbot. Higher means more AI-like.</p>
+        <p class="auth-line">
+          <span class="auth-num num" id="authNum"></span><span class="score-of num">/100</span>
+          <span class="auth-band" id="authBand"></span>
+        </p>
+        <div class="auth-bar" aria-hidden="true"><span id="authFill"></span></div>
+        <p class="note" id="authNote" hidden></p>
+        <p class="cap auth-contrast" id="authContrast" hidden></p>
+        <p class="summary" id="authSummary"></p>
+        <ul class="auth-reasons" id="authReasons"></ul>
+        <div id="authPassagesWrap" hidden>
+          <p class="cap auth-sub">Score for each part. Click one to see it on the page.</p>
+          <ol class="auth-passages" id="authPassages"></ol>
+        </div>
+        <p class="auth-opinion" id="authOpinion" hidden></p>
+        <p class="cap auth-status"><span id="authTier"></span> <button class="btn-quiet" id="authAction" type="button" hidden></button></p>
+        <p class="cap">0–29 probably a person · 30–59 can't tell · 60–79 maybe AI · 80–100 probably AI. This is a guess, not proof. Never use it alone to accuse anyone.</p>
       </section>
 
       <section class="proposal" id="proposal" aria-labelledby="proposalHeading" hidden>

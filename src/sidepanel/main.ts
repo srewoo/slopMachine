@@ -1,4 +1,5 @@
 import { changedRange, diffStats, diffWords, type DiffOp } from '../shared/diff.ts';
+import { docTarget, GOOGLE_DOCS_ORIGIN, type DocTarget } from '../shared/document.ts';
 import { ApplyResultSchema, OkSchema, SnapshotSchema, type Request, type Snapshot } from '../shared/messages.ts';
 import { ProviderError } from '../shared/providers.ts';
 import { DEFAULT_SETTINGS, loadSettings, onSettingsChanged, updateSettings, type Settings } from '../shared/settings.ts';
@@ -7,9 +8,11 @@ import { PURPOSES, type Purpose } from '../shared/prompt.ts';
 import { siteMatches, suggestSitePattern } from '../shared/sites.ts';
 import type { Fix, Issue } from '../shared/types.ts';
 import { createAiReview } from './ai.ts';
+import { createAuthorship } from './authorship.ts';
+import { createLocalDoc, DocError, loadFile, loadTarget, requestAccess, type LoadedDoc, type LocalDoc } from './document.ts';
 import { engineStatus, readOptions, startRewrite } from './engine.ts';
 import { followActiveTab } from './tabs.ts';
-import { $, copyText, renderDiff, renderIssues, renderScore, showEmpty, type DiffMode } from './render.ts';
+import { $, copyText, renderDiff, renderIssues, renderScore, showEmpty, type DiffMode, type EmptyAction } from './render.ts';
 
 type Ready = Extract<Snapshot, { state: 'ready' }>;
 
@@ -31,6 +34,10 @@ let settings: Settings = DEFAULT_SETTINGS;
 let proposal: Proposal | null = null;
 let job: AbortController | null = null;
 let applyBlocked = false;
+/** A PDF or Google Doc the user asked to review: the panel reads it itself, read-only. */
+let doc: LocalDoc | null = null;
+/** What the active tab shows, when Chrome lets the panel see its URL. */
+let target: DocTarget | null = null;
 // The word threshold only gates the toolbar badge; an open panel reviews any draft with text in it.
 const ready = (): Ready | null => (snap?.state === 'ready' && snap.analysis.wordCount > 0 ? snap : null);
 const undoKey = /Mac/.test(navigator.userAgent) ? 'Cmd+Z' : 'Ctrl+Z';
@@ -39,6 +46,7 @@ const announce = (msg: string): void => void ($('live').textContent = msg);
 const result = (msg: string): void => void ($('result').textContent = msg);
 
 async function ask(msg: Request): Promise<unknown> {
+  if (doc) return doc.handle(msg);
   if (tabId === null) return null;
   try {
     return await chrome.tabs.sendMessage(tabId, msg, { frameId });
@@ -49,11 +57,97 @@ async function ask(msg: Request): Promise<unknown> {
 
 const ai = createAiReview({ settings: () => settings, ready: () => ready(), changed: () => render(), openSettings: () => openSettings('#providers'), ask });
 
+const authorship = createAuthorship({
+  settings: () => settings,
+  changed: () => render(),
+  opinion: (s) => ai.opinion(s),
+  openSettings: () => openSettings('#detection'),
+  reveal: (start, end) => {
+    const s = ready();
+    if (s) void ask({ v: 1, type: 'reveal', revision: s.revision, start, end });
+  },
+});
+
 async function reviewPage(): Promise<void> {
   ai.reset();
   const parsed = SnapshotSchema.safeParse(await ask({ v: 1, type: 'page/review' }));
   setSnapshot(parsed.success ? parsed.data : null);
   if (parsed.success && parsed.data.state === 'ready') announce('Reviewing this page.');
+}
+
+// ── Documents: PDFs and Google Docs ───────────────────────────────────────────
+
+/** The URL is only visible for sites the user granted, or after a toolbar click (activeTab). */
+async function lookAtTab(): Promise<void> {
+  const id = tabId;
+  const tab = id === null ? null : await chrome.tabs.get(id).catch(() => null);
+  if (id !== tabId) return;
+  target = docTarget(tab?.url);
+  if (!doc) render();
+}
+
+function closeDoc(): void {
+  doc = null;
+}
+
+function openDoc(loaded: LoadedDoc): void {
+  ai.reset();
+  job?.abort();
+  proposal = null;
+  frameId = 0;
+  doc = createLocalDoc(loaded, () => settings);
+  setSnapshot(doc.handle({ v: 1, type: 'snapshot/get' }) as Snapshot);
+  announce(`Reviewing ${loaded.site}, ${loaded.note}.`);
+}
+
+function docFailed(e: unknown): void {
+  closeDoc();
+  setSnapshot(null);
+  if (!(e instanceof DocError)) console.error('SlopMachine: document review failed', e);
+  showEmpty('Couldn’t read the document', e instanceof DocError ? e.message : 'Something went wrong while reading it. Nothing was sent anywhere.', undefined, docActions());
+}
+
+function loading(what: string): void {
+  showEmpty(`Reading ${what}…`, 'On this device. Large PDFs take a few seconds.');
+}
+
+/** Click handler: the permission request has to go out before anything else awaits. */
+function reviewTarget(t: DocTarget): void {
+  const granted = requestAccess(t);
+  void (async () => {
+    try {
+      if (!(await granted)) return showEmpty('Access not given', `SlopMachine needs to download this ${t.kind === 'pdf' ? 'file' : t.name} to read it. Nothing is sent anywhere.`, { label: 'Try again', run: () => reviewTarget(t) }, docActions());
+      loading(t.name);
+      openDoc(await loadTarget(t));
+    } catch (e) {
+      docFailed(e);
+    }
+  })();
+}
+
+/** The URL was hidden: ask for Google Docs, then look again. */
+function reviewGoogle(): void {
+  const granted = chrome.permissions.request({ origins: [GOOGLE_DOCS_ORIGIN] });
+  void (async () => {
+    if (!(await granted)) return;
+    await lookAtTab();
+    if (target && target.kind !== 'pdf') reviewTarget(target);
+    else showEmpty('This tab isn’t a Google Doc', 'Open the Doc or Slides deck in this tab, then try again.', undefined, docActions());
+  })();
+}
+
+function chooseFile(): void {
+  const input = $<HTMLInputElement>('pdfFile');
+  input.value = '';
+  input.click();
+}
+
+/** Quiet links for documents, offered wherever the panel has nothing else to read. */
+function docActions(): EmptyAction[] {
+  const out: EmptyAction[] = [];
+  if (!target || target.kind === 'pdf') out.push({ label: 'Review a Google Doc in this tab', run: reviewGoogle });
+  out.push({ label: 'Choose a PDF file', run: chooseFile });
+  return out;
 }
 
 async function refresh(): Promise<void> {
@@ -70,6 +164,7 @@ function setSnapshot(next: Snapshot | null): void {
   // Privacy: once the editor is gone, its text, any proposal and any in-flight rewrite leave the panel.
   if (!now) {
     ai.reset();
+    authorship.reset();
     proposal = null;
     job?.abort();
     const consent = $<HTMLDialogElement>('consent');
@@ -82,14 +177,25 @@ function setSnapshot(next: Snapshot | null): void {
 const openSettings = (hash = '') => void chrome.tabs.create({ url: chrome.runtime.getURL(`options/index.html${hash}`) });
 
 function render(): void {
-  $('context').textContent = snap?.state === 'ready' ? `${snap.site} · ${snap.mode === 'page' ? 'page' : 'draft'}` : '';
-  if (!snap) {
-    showEmpty('Nothing to check on this page', 'SlopMachine reads drafts only on sites you turn on, such as Gmail or LinkedIn.', { label: 'Choose sites', run: () => openSettings('#sites') });
+  $('context').textContent = snap?.state === 'ready' ? `${snap.site} · ${doc ? doc.note : snap.mode === 'page' ? 'page' : 'draft'}` : '';
+  const t = target;
+  if (!snap && t) {
+    showEmpty(
+      t.kind === 'pdf' ? 'Review this PDF' : `Review this ${t.name}`,
+      t.kind === 'pdf'
+        ? 'SlopMachine downloads the file and reads its text on this device, read-only. Chrome asks once to allow this site.'
+        : 'SlopMachine reads the text through Google’s export, with your signed-in session, on this device and read-only. Chrome asks once to allow docs.google.com.',
+      { label: t.kind === 'pdf' ? 'Review this PDF' : `Review this ${t.name}`, run: () => reviewTarget(t) },
+      [{ label: 'Choose a PDF file', run: chooseFile }],
+    );
+  } else if (!snap) {
+    showEmpty('Nothing to check on this page', 'SlopMachine reads drafts only on sites you turn on, such as Gmail or LinkedIn. It can also review a PDF or a Google Doc.', { label: 'Choose sites', run: () => openSettings('#sites') }, docActions());
   } else if (snap.state === 'none') {
     showEmpty(
       'Click into something you are writing',
       'An email, a post or a doc: the check runs as you type. To check a published article instead, review this page. Nothing leaves this device.',
       { label: 'Review this page', run: () => void reviewPage() },
+      docActions(),
     );
   } else if (snap.state === 'unsupported') {
     const host = snap.host;
@@ -109,6 +215,7 @@ function render(): void {
     renderIssues(snap, issueHandlers, ai.issues(snap));
   }
   ai.render(ready());
+  authorship.render(ready(), !!proposal);
   renderProposal();
   void renderEngine();
 }
@@ -167,6 +274,7 @@ function renderProposal(): void {
   $('footActions').hidden = !p;
   // While a proposal is open, the list it was built from is frozen out of reach.
   $('issuesSection').hidden = !!p;
+  $('authorship').hidden = !!p || !ready();
   $('rewriteSection').hidden = !!p;
   if (!p) return;
   const stale = !s || s.revision !== p.revision;
@@ -275,6 +383,7 @@ function wire(): void {
   $('thresholdFix').addEventListener('click', () => void updateSettings((s) => ({ ...s, minWords: DEFAULT_SETTINGS.minWords })));
 
   $('aiAction').addEventListener('click', () => ai.act());
+  authorship.wire();
   let pending: number | undefined;
   followActiveTab({
     tab(id) {
@@ -284,16 +393,21 @@ function wire(): void {
       tabId = id;
       frameId = 0;
       proposal = null;
+      closeDoc(); // privacy: a document's text leaves the panel with its tab
+      target = null;
       result('');
       void refresh();
+      void lookAtTab();
     },
     loaded(id) {
       if (id !== tabId) return;
       frameId = 0;
+      closeDoc();
       void refresh();
+      void lookAtTab();
     },
     broadcast(msg, from, frame) {
-      if (from !== tabId) return;
+      if (from !== tabId || doc) return;
       if (msg.type === 'analysis/cleared') {
         // Another frame's editor going away (e.g. the top page blurring into a frame) is not ours.
         if (frame !== frameId) return;
@@ -317,7 +431,15 @@ function wire(): void {
   });
 
   const syncPurpose = () => ($<HTMLSelectElement>('purpose').value = settings.purpose);
-  onSettingsChanged((s) => { settings = s; syncPurpose(); void renderEngine(); });
+  onSettingsChanged((s) => { settings = s; syncPurpose(); if (doc) void refresh(); else render(); }); // render() also refreshes the engine line
+  $<HTMLInputElement>('pdfFile').addEventListener('change', (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    loading(file.name);
+    loadFile(file).then(openDoc, docFailed);
+  });
+  // A site granted from the panel (Google Docs, a PDF's host) makes the tab's URL visible.
+  chrome.permissions.onAdded.addListener(() => void lookAtTab());
   chrome.storage.onChanged.addListener((_c, area) => area === 'session' && void renderEngine());
   window.addEventListener('focus', () => void renderEngine()); // key saved in Settings (IndexedDB has no change event)
   void loadSettings().then((s) => { settings = s; syncPurpose(); void renderEngine(); });

@@ -13,6 +13,7 @@
       <p class="brand">SlopMachine</p>
       <a href="#sites">Sites</a>
       <a href="#rules">Rules</a>
+      <a href="#detection">AI-writing check</a>
       <a href="#providers">Rewrite engine</a>
       <a href="#data">Your data</a>
     </nav>
@@ -50,6 +51,21 @@
         <div><button class="btn" id="resetRules" type="button">Reset rules</button></div>
       </section>
 
+      <section id="detection" aria-labelledby="detectionHeading">
+        <h2 id="detectionHeading">AI-writing check</h2>
+        <p class="muted">Estimates how likely a draft or page was written by AI. Every tier runs on this device and your text is never sent anywhere. The deeper tiers download open models from Hugging Face once, then work offline.</p>
+        <fieldset class="choices" id="detectionChoices">
+          <legend class="visually-hidden">Depth</legend>
+          <label class="choice"><input type="radio" name="detection" value="fast">
+            <span><strong>Fast</strong><span class="muted">Style statistics plus a small detector trained on 2025 chatbot writing from GPT, Gemini, Claude and others. Ships with the extension: nothing to download.</span></span></label>
+          <label class="choice"><input type="radio" name="detection" value="classifier">
+            <span><strong>Classifier</strong><span class="muted">Adds a RoBERTa detector trained on the RAID benchmark. Slightly better on paraphrased text than Fast. <span class="num" id="detectionClassifierMb"></span> download, about a second per check.</span></span></label>
+          <label class="choice"><input type="radio" name="detection" value="full">
+            <span><strong>Full</strong><span class="muted">Adds two small language models for perplexity and Binoculars scoring. Highest accuracy overall and the fewest false alarms on essays and articles. <span class="num" id="detectionFullMb"></span> download, a few seconds per check.</span></span></label>
+        </fieldset>
+        <p class="cap muted">Each tier's measured accuracy is in docs/detection-eval.md in the project. Built for business writing: email, posts, marketing and docs. Known weak spot: very short timed essays by non-native English writers, like TOEFL answers of about 100 words, are wrongly scored 80+ about 4 times in 10 (GPTZero: 5 in 10). Longer school essays by English learners are wrongly flagged under 1% of the time. Never use a score alone on student work. No detector is proof: never use a score alone to accuse anyone.</p>
+      </section>
+
       <section id="providers" aria-labelledby="providersHeading">
         <h2 id="providersHeading">Rewrite engine</h2>
         <p class="muted">Checking always happens on this device. A rewrite only runs when you press Rewrite, and only through the engine you pick here.</p>
@@ -73,7 +89,7 @@
 
         <div class="panel" id="localPanel" hidden>
           <label class="field"><span>Endpoint (must be localhost or 127.0.0.1)</span><input class="input" id="localUrl" autocomplete="off" spellcheck="false"></label>
-          <label class="field"><span>Model</span><input class="input" id="localModel" autocomplete="off" spellcheck="false"></label>
+          <label class="field"><span>Model</span><input class="input" id="localModel" list="localModels" autocomplete="off" spellcheck="false"><datalist id="localModels"></datalist></label>
           <p class="cap">Ollama blocks browser extensions by default. Start it with <code>OLLAMA_ORIGINS=chrome-extension://<span id="extId"></span></code>. In LM Studio, turn on CORS in the server settings.</p>
           <p class="cap" id="localProbe"></p>
           <div class="actions"><button class="btn" id="localTest" type="button">Allow access and test</button><button class="btn-quiet" id="localRevoke" type="button">Revoke access</button></div>

@@ -110,3 +110,67 @@ test('a heavily AI-sounding paragraph scores high; a plain one stays low', () =>
   const plain = 'We moved the import button to the toolbar. It now accepts CSV files up to 50 MB, and a progress bar shows how far along the upload is.';
   assert.equal(analyze(plain, { ...S, purpose: 'docs' }).status, 'low');
 });
+
+// Patterns from petergyang/no-ai-slop (MIT).
+test('faux-insight setups, cut with their colon', () => {
+  fires('faux-insight', "Here's what nobody tells you about pricing.");
+  fires('faux-insight', 'The part everyone misses: distribution is the moat.');
+  fires('faux-insight', 'What most people get wrong is the timing.');
+  fires('faux-insight', 'This is the part most people skip.', 'outreach');
+  assert.equal(fixed('The part everyone misses: distribution is the moat.', 'faux-insight'), 'Distribution is the moat.');
+  quiet('faux-insight', 'Most people renew in March.');
+  quiet('faux-insight', 'Nobody told me the build was broken.');
+});
+
+test('colon reveals, but not labels, lists or docs', () => {
+  fires('colon-reveal', 'We shipped search. The best part: it learns from your edits.');
+  fires('colon-reveal', 'The detail that makes it work: a separate agent grades it.');
+  fires('colon-reveal', 'The bottom line: we need two more weeks.', 'outreach');
+  assert.equal(fixed('The best part: it learns.', 'colon-reveal'), 'It learns.');
+  quiet('colon-reveal', 'Note: restart the server after upgrading.');
+  quiet('colon-reveal', 'The default timeout: 30 seconds.');
+  quiet('colon-reveal', 'The fix: restart the worker.', 'docs');
+  quiet('colon-reveal', 'Agenda: pricing, hiring, Q3.');
+});
+
+test('rhetorical setups and self-answered questions', () => {
+  fires('rhetorical-setup', 'What if I told you onboarding takes ten minutes?');
+  fires('rhetorical-setup', 'Plot twist: the slow query was the cache.');
+  fires('rhetorical-setup', 'Think about it: every retry costs money.');
+  fires('rhetorical-setup', 'We halved the page weight. The result? Signups doubled.');
+  assert.equal(fixed('Plot twist: the slow query was the cache.', 'rhetorical-setup'), 'The slow query was the cache.');
+  assert.equal(fixed('We halved it. The result? Signups doubled.', 'rhetorical-setup'), 'We halved it. Signups doubled.');
+  quiet('rhetorical-setup', 'I need to think about it before Friday.');
+  quiet('rhetorical-setup', 'The result was a 2x speedup.');
+});
+
+test('synonym cycling: two names weak alone, three a clear tell', () => {
+  fires('synonym-cycling', 'The agent reads your inbox. The assistant drafts replies. The tool sends them.');
+  fires('synonym-cycling', 'The agent reads your inbox. The assistant drafts replies. Let that sink in.');
+  quiet('synonym-cycling', 'The agent reads your inbox. The assistant drafts replies.');
+  quiet('synonym-cycling', 'The agent reads your inbox. The agent drafts replies. The agent sends them.');
+  quiet('synonym-cycling', 'The app reads your inbox.\n\nThe service bills monthly. Invoices go out on the 1st.');
+  fires('synonym-cycling', 'The copilot reads your inbox. The bot drafts replies. The model sends them.');
+  fires('synonym-cycling', 'The customer signs. The client pays. The buyer renews.');
+  quiet('synonym-cycling', 'The team owns billing. The customer sees invoices. The app sends reminders.');
+});
+
+test('no-ai-slop words and empty phrases get swaps', () => {
+  fires('phrase', 'We utilize caching in order to cut latency.');
+  assert.equal(fixed('We utilize caching.', 'phrase'), 'We use caching.');
+  assert.equal(fixed('The truth is, nobody reads the docs.', 'phrase'), 'Nobody reads the docs.');
+});
+
+test('no-ai-slop README examples that the older rules missed', () => {
+  // The bare two-part form is weak alone: people write it to correct a fact.
+  quiet('not-x-but-y', "It's not the model. It's the eval.");
+  quiet('not-x-but-y', "The build isn't green. It's failing on lint.");
+  fires('not-x-but-y', "The question isn't the model, it's the eval. Let that sink in.");
+  fires('not-x-but-y', "The future isn't coming. It's already here. The question isn't the model, it's the eval.");
+  assert.equal(analyze("It isn't just a tool, it's a mindset.", { ...S, purpose: 'content' }).issues.filter((i) => i.ruleId === 'not-x-but-y').length, 1, 'one issue, not two');
+  fires('run-up', 'Let me be clear, we missed the date.');
+  fires('closer', "That's it. That's the whole thing.");
+  fires('closer', 'That last part matters more than it sounds.');
+  quiet('not-x-but-y', "The build isn't ready yet, so we wait until Monday.");
+  quiet('closer', "That's it for today.");
+});

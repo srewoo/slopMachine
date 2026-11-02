@@ -10,7 +10,11 @@
     "test": "node --test test/*.test.ts test/*.test.mjs",
     "check": "npm run typecheck && npm test && npm run build",
     "e2e": "node --test --test-concurrency=1 test/e2e/*.e2e.mjs",
-    "store:assets": "node scripts/store-assets.mjs"
+    "store:assets": "node scripts/store-assets.mjs",
+    "detector:fetch": "node scripts/detector/fetch.mjs && python3 scripts/detector/fetch_raid.py && python3 scripts/detector/fetch_modern.py",
+    "detector:features": "node scripts/detector/featurize.ts",
+    "detector:train": "node scripts/detector/featurize_ft.ts && node scripts/detector/train.ts",
+    "detector:finetune": "node scripts/detector/prepare_ft.ts && python3 scripts/detector/finetune.py"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.6",
@@ -21,6 +25,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",
+    "@huggingface/transformers": "^4.3.1",
+    "pdfjs-dist": "6.4.299",
     "zod": "^4.6.7"
   }
 }

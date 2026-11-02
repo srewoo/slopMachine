@@ -3,7 +3,7 @@ import { OutlineSchema, PAGE_OUTLINE_MAX, type Request, type Snapshot } from '..
 import { builtinAvailability, completeBuiltin, completeOpenAICompatible, ProviderError, startBuiltinSession } from '../shared/providers.ts';
 import {
   buildPageReviewPrompt, buildReviewPrompt, findingsToIssues, PAGE_REVIEW_SCHEMA, PAGE_REVIEW_SYSTEM, parseReview, REVIEW_SCHEMA, REVIEW_SYSTEM,
-  type Rating, type Review, type Verdicts,
+  type AuthorshipOpinion, type Rating, type Review, type Verdicts,
 } from '../shared/review.ts';
 import { loadKey, updateSettings, type Settings } from '../shared/settings.ts';
 import type { Task } from '../shared/task.ts';
@@ -154,6 +154,10 @@ export function createAiReview(d: Deps) {
     },
     /** AI findings mapped onto the current text; fixed or dismissed ones drop out. */
     issues,
+    /** The engine's read on authorship, when its last review covered exactly this text. */
+    opinion(s: Ready | null): { label: string; opinion: AuthorshipOpinion } | null {
+      return s && state.kind === 'done' && state.review.authorship && state.text === s.text ? { label: state.label, opinion: state.review.authorship } : null;
+    },
     render(s: Ready | null): void {
       const line = $('aiLine');
       line.hidden = !s || state.kind === 'idle';

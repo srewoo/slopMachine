@@ -17,11 +17,33 @@ Open `chrome://extensions`, turn on Developer mode, **Load unpacked** → `dist/
 | --- | --- |
 | `npm run check` | typecheck + unit tests + build |
 | `npm test` | rule engine, diff, sanitize, prompt, settings and message-schema tests (`node:test`, native TS) |
-| `npm run e2e` | loads the unpacked extension in Chromium: detection, badge, apply, native undo, stale revision, password/iframe exclusion, zero network; plus BYOK against intercepted OpenAI/Anthropic/Gemini APIs (model lists, auth headers, consent, temperature/thinking per model). Test builds go to the system temp folder, never `dist/` |
+| `npm run e2e` | loads the unpacked extension in Chromium: detection, AI score with no network, badge, apply, native undo, stale revision, password/iframe exclusion, zero network; plus BYOK against intercepted OpenAI/Anthropic/Gemini APIs (model lists, auth headers, consent, temperature/thinking per model). Test builds go to the system temp folder, never `dist/` |
 | `npm run store:assets` | regenerates Chrome Web Store graphics in `store/assets/` (5 screenshots, promo tiles, icon) from the real extension, and `store/privacy-policy.html` from `store/privacy-policy.md`. Listing copy, permission justifications and data-use answers are in `store/listing.md` |
 | `node scripts/screens.mjs <dir>` | screenshots the real side panel (light, dark, proposal) and options page |
 
 `npm run e2e` needs Playwright's Chromium once: `npx playwright install chromium`.
+
+## AI-writing check
+
+Every draft and reviewed page gets an **AI score** (0–100) next to the review score: under 30 likely a person, 30–59 unclear, 60–79 leans AI, 80+ likely AI. The panel shows the reasons, a per-passage breakdown, and, when an AI review ran, the engine's own read as a second opinion. Everything runs on the device; text is never sent anywhere for this.
+
+| Tier | What it adds | Download |
+| --- | --- | --- |
+| Fast (default) | Style statistics (`src/shared/detect/stylometry.ts`) plus a detector fine-tuned on 2025 chatbot writing, shipped in the package (`static/models/slop-detector`, ~34 MB) | none |
+| Classifier | TMR RoBERTa detector trained on RAID | 126 MB once |
+| Full | SmolLM2-135M base + instruct: perplexity, entropy, Binoculars | 399 MB once |
+
+Until the models answer, the panel shows an instant style-only read. The models run in a worker (`src/detect-worker`) with Transformers.js and the packaged ONNX Runtime WebAssembly build. Model files come from huggingface.co pinned to commits (`src/shared/detect/tiers.ts`) and are cached by the browser. Text is normalized first (zero-width characters and look-alike letters removed), and the review list flags those characters with a fix.
+
+Each tier is a model chosen between logistic regression and boosted trees by leave-one-genre-out validation, and its thresholds come from out-of-genre scores. Measured accuracy, false alarms on non-native English writers, results per attack and on modern Claude-written business text are in [`docs/detection-eval.md`](docs/detection-eval.md). To reproduce or retrain (about 2 hours, ~5 GB of data and models in `.cache/`):
+
+```sh
+npm run detector:fetch      # MAGE, RAID, HC3, Enron, LMArena, WildChat, Stack Exchange, Liang et al. → .cache/detector/raw (needs pyarrow; download the dumps listed in scripts/detector/fetch_modern.py first)
+npm run detector:features   # same feature code and pinned models as the extension, in Node
+npm run detector:finetune   # fine-tunes the bundled detector on split A (torch; Apple GPU if present)
+npm run detector:train      # scores everything with it, fits the tiers on split B, writes weights.ts and docs/detection-eval.md
+E2E_DEEP=1 node --test test/e2e/detect.e2e.mjs   # browser vs Node parity for every model feature
+```
 
 ## How it fits together
 
@@ -50,6 +72,7 @@ content script ──analysis/updated (score only, no text)──▶ service wor
 | Remote consent | Confirmed **every** request; "remember for this provider" deferred |
 | §5.1 "never scan the page" vs reviewing published docs and articles | Only on request: on an enabled site, **Review this page** reads the main content (article/main, skipping nav, header, footer, sidebars, forms and hidden text). Read-only: fixes and rewrites are Copy only, "Show on page" just selects text, and navigating away ends the review |
 | One kind of writing | A **Reviewing as** choice (sales outreach, marketing copy, posts and articles, documentation) changes which rules apply and how the rewrite is briefed |
+| PDFs and Google Docs: Chrome's PDF viewer is closed to extensions and Docs draws on a canvas | The **panel** reads them, only on request (`src/sidepanel/document.ts`). PDFs: downloaded from the tab's own https address after Chrome asks for that one site (given back right after), or chosen from disk; parsed by pdf.js in its packaged worker, loaded only on first use; wrapped lines joined back into paragraphs (`src/shared/document.ts`). Docs and Slides: Google's plain-text export with the user's session. Same rules, AI score and AI page check; read-only, ends with the tab. Scanned PDFs (no text layer) are refused, not OCR'd |
 | §5.4 "shorten a selected passage" without a model | Deferred: no deterministic way to do it well |
 | Streaming output | Not streamed; diff and Apply appear only after the full response is sanitized |
 

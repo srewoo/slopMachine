@@ -1,3 +1,4 @@
+import { INVISIBLE_RE, MIXED_SCRIPT_RE, unmask } from '../detect/normalize.ts';
 import type { EditSignals, Family, Fix, RuleSettings, Severity } from '../types.ts';
 import { fragmentRows, TELLS, tellFix } from './humanizer.ts';
 import { DEFAULT_PHRASES, type PhraseEntry } from './phrases.ts';
@@ -92,11 +93,13 @@ const stockPhrases: Detector = (text, s) => {
 };
 
 const SOURCE_CUE = /\b(according to|source|per |study|report|survey|data from|measured|case study)|https?:\/\//i;
+/** A goal or threshold, not a result: "at least 80% rated useful", "keep errors under 2%". */
+const TARGET_CUE = /\b(?:at least|at most|no more than|no less than|under|below|target(?:s|ed)?|goal|aim(?:s|ing)? (?:for|to)|threshold|SLA|KPI|success criteria)\b|[<>≤≥]/i;
 
 const numericClaims: Detector = (text) => {
   const out: Candidate[] = [];
   for (const sentence of sentences(text)) {
-    if (SOURCE_CUE.test(sentence.text)) continue;
+    if (SOURCE_CUE.test(sentence.text) || TARGET_CUE.test(sentence.text)) continue;
     for (const m of sentence.text.matchAll(/(?<![\w.])\d+(?:[.,]\d+)?\s?(?:%|percent\b|x\b)/gi)) {
       out.push({
         ruleId: 'numeric-claim',
@@ -218,9 +221,11 @@ const humanizerTells: Detector = (text, s) => {
   const hay = normalizeQuotes(text);
   const excluded = excludedRanges(text);
   const out: Candidate[] = [];
+  const takenByRule = new Map<string, { start: number; end: number }[]>();
   for (const p of TELLS) {
     if (p.only && !p.only.includes(purpose)) continue;
-    const taken: { start: number; end: number }[] = [];
+    const taken = takenByRule.get(p.ruleId) ?? [];
+    takenByRule.set(p.ruleId, taken);
     for (const m of hay.matchAll(p.re)) {
       const span = { start: m.index, end: m.index + m[0].length };
       if (!m[0].trim() || overlaps(span, excluded) || overlaps(span, taken)) continue;
@@ -242,7 +247,87 @@ const humanizerTells: Detector = (text, s) => {
   return out;
 };
 
-export const DETECTORS: readonly Detector[] = [placeholders, stockPhrases, numericClaims, vagueCta, emptyOpener, structure, pasteIndicator, humanizerTells];
+/** Zero-width characters and look-alike letters: invisible to readers, used to slip past detectors. One issue, one fix. */
+const hiddenChars: Detector = (text) => {
+  const hits = [...text.matchAll(INVISIBLE_RE), ...text.matchAll(MIXED_SCRIPT_RE)].map((m) => m.index).sort((a, b) => a - b);
+  if (!hits.length) return [];
+  const start = hits[0]!;
+  const end = hits[hits.length - 1]! + 1;
+  return [{
+    ruleId: 'hidden-chars', family: 'leftovers', severity: 'warning', start, end, match: '',
+    title: `Remove ${hits.length} hidden or look-alike ${hits.length === 1 ? 'character' : 'characters'}`,
+    message: 'Zero-width characters or letters from another alphabet that look Latin. They are a known way to fool AI detectors and can break search and copy-paste.',
+    base: 10,
+    fix: { label: 'Clean them up', replacement: unmask(text.slice(start, end)), start, end },
+  }];
+};
+
+/**
+ * The same short labels opening line after line ("What it does: … Why it's critical: …"), a layout
+ * chat models reach for. Plain-text twin of humanizer's bold-labels rule: pages and pasted text lose the bold.
+ */
+const labelTemplate: Detector = (text) => {
+  const lines = [...text.matchAll(/^[ \t]*(?:[-*•]\s*)?(?:\*\*)?([A-Z][\w'’ ]{1,28}?):(?:\*\*)?[ \t]+\S/gm)];
+  const counts = new Map<string, number>();
+  for (const m of lines) counts.set(m[1]!.toLowerCase(), (counts.get(m[1]!.toLowerCase()) ?? 0) + 1);
+  const repeated = [...counts.entries()].filter(([, n]) => n >= 2);
+  if (repeated.length < 2 || !repeated.some(([, n]) => n >= 3)) return [];
+  const first = lines.find((m) => repeated.some(([l]) => l === m[1]!.toLowerCase()))!;
+  const names = repeated.slice(0, 2).map(([l]) => `“${lines.find((m) => m[1]!.toLowerCase() === l)![1]}:”`).join(' and ');
+  return [{
+    ruleId: 'label-template', family: 'structure', severity: 'info', start: first.index, end: first.index + first[0].length - 1, match: '',
+    title: `The same labels repeat (${names})`,
+    message: 'Line after line opens with the same label. Write the point as a sentence, or keep labels only where a reader scans for them.',
+    base: 4,
+  }];
+};
+
+/**
+ * Stand-in names writers rotate for one thing, grouped so that "the dashboard… the API…" (different
+ * things) stays quiet. ponytail: fixed lists; the AI review catches open-ended cases.
+ */
+const CYCLE_GROUPS: Readonly<Record<string, string>> = Object.fromEntries([
+  // AI copy swaps "agent", "assistant" and "tool" for one product, so actors and products share a group.
+  ['product', 'agent assistant copilot bot chatbot model ai tool platform app application solution system product software service engine offering suite hub'],
+  ['company', 'company firm business organization organisation team vendor provider'],
+  ['customer', 'customer client user buyer account'],
+].flatMap(([group, words]) => words!.split(' ').map((w) => [w, group!])));
+const CYCLE_NOUN = new RegExp(`^(?:the|this|our|your|its|their) (${Object.keys(CYCLE_GROUPS).join('|')})\\b`, 'i');
+
+const synonymCycling: Detector = (text) => {
+  const out: Candidate[] = [];
+  for (const p of paragraphs(text)) {
+    const list = sentences(p.text);
+    for (let i = 0; i < list.length;) {
+      const names: string[] = [];
+      let j = i;
+      while (j < list.length) {
+        const noun = CYCLE_NOUN.exec(list[j]!.text)?.[1]?.toLowerCase();
+        if (!noun) break;
+        names.push(noun);
+        j++;
+      }
+      // Distinct names within the largest same-group set.
+      const byGroup = new Map<string, Set<string>>();
+      for (const name of names) byGroup.set(CYCLE_GROUPS[name]!, (byGroup.get(CYCLE_GROUPS[name]!) ?? new Set()).add(name));
+      const distinct = [...[...byGroup.values()].reduce((a, b) => (b.size > a.size ? b : a), new Set<string>())];
+      if (distinct.length >= 2) {
+        out.push({
+          ruleId: 'synonym-cycling', family: 'structure', severity: 'info',
+          start: p.start + list[i]!.start, end: p.start + list[j - 1]!.end, match: '',
+          title: `One thing, ${distinct.length} names (${distinct.map((n) => `“${n}”`).join(', ')})`,
+          message: 'Rotating names for the same thing makes the reader wonder if they are different things. Pick one and repeat it, or merge the sentences.',
+          base: 5,
+          ...(distinct.length < 3 ? { weak: true } : {}),
+        });
+      }
+      i = Math.max(j, i + 1);
+    }
+  }
+  return out;
+};
+
+export const DETECTORS: readonly Detector[] = [placeholders, stockPhrases, numericClaims, vagueCta, emptyOpener, structure, pasteIndicator, humanizerTells, hiddenChars, labelTemplate, synonymCycling];
 
 export const RULES: readonly { readonly id: string; readonly label: string; readonly example: string }[] = [
   { id: 'placeholder', label: 'Unfilled merge tags and template notes', example: 'Catches {{first_name}}, [Company] and INSERT notes.' },
@@ -260,6 +345,10 @@ export const RULES: readonly { readonly id: string; readonly label: string; read
   { id: 'closer', label: 'Dramatic closers and fragments', example: '“Let that sink in.”, “That is the real win.”, “No fuss. No setup. Just results.”' },
   { id: 'deep-saying', label: 'Sayings that sound deep', example: '“At its core, what really matters is…”' },
   { id: 'run-up', label: 'Staged run-ups', example: '“Here’s the thing:”, “Let’s dive in.”, “Honestly?”' },
+  { id: 'faux-insight', label: 'Faux-insight setups', example: '“What nobody tells you…”, “The part everyone misses:”' },
+  { id: 'colon-reveal', label: 'Colon reveals', example: '“The best part: it learns.” Sales, marketing and posts only.' },
+  { id: 'rhetorical-setup', label: 'Rhetorical setups', example: '“What if I told you…”, “Plot twist:”, “The result? It doubled.”' },
+  { id: 'synonym-cycling', label: 'One thing, many names', example: '“The agent reads mail. The assistant drafts replies.” Two names only count alongside other tells.' },
   { id: 'strawman', label: 'Arguing with no one', example: '“I’m not saying X, but…”, “To be clear,”' },
   { id: 'ing-rider', label: '“…, highlighting X” tails', example: '“The office opened in 2019, underscoring its commitment to growth.”' },
   { id: 'borrowed-authority', label: 'Unnamed authorities', example: '“Experts believe…”, “Studies show…” with no source.' },
@@ -271,5 +360,7 @@ export const RULES: readonly { readonly id: string; readonly label: string; read
   { id: 'bold-labels', label: 'Bold as decoration', example: '“- **Performance:** Performance was improved.”' },
   { id: 'decorated-headings', label: 'Decorated headings', example: 'Title Case headings, emoji or arrow bullets.' },
   { id: 'meta-text', label: 'Writing about the document', example: '“The table below compares…”. Docs and posts only.' },
+  { id: 'label-template', label: 'Repeated label template', example: '“What it does:”, “Why it’s critical:” opening item after item.' },
+  { id: 'hidden-chars', label: 'Hidden and look-alike characters', example: 'Zero-width spaces, or a Cyrillic “а” inside an English word.' },
   { id: 'paste', label: 'Pasted and not edited yet', example: 'Most of the draft arrived in one paste and hasn’t been touched since. Only noticed during this session.' },
 ];

@@ -32,6 +32,11 @@ const SettingsSchema = z.object({
   customPhrases: z.array(z.string()),
   purpose: z.enum(['outreach', 'marketing', 'content', 'docs']),
   provider: z.enum(['none', 'builtin', 'local', 'byok']),
+  /**
+   * AI-writing check depth. 'fast' needs nothing; 'classifier' and 'full' download open models
+   * from Hugging Face once and run them on this device. Text never leaves the device.
+   */
+  detection: z.enum(['fast', 'classifier', 'full']),
   /** Run the AI review by itself when the panel opens (never past a consent the user hasn't given). */
   aiAuto: z.boolean(),
   /** Remote providers the user said not to ask about again before each send. */
@@ -57,6 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
   allowList: [],
   customPhrases: [],
   purpose: 'outreach',
+  detection: 'fast',
   provider: 'none',
   aiAuto: true,
   trustedVendors: [],

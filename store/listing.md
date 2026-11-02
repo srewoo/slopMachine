@@ -8,8 +8,8 @@ Everything the developer dashboard asks for, in the order it asks. Upload `relea
 
 **Name** (from the manifest): SlopMachine
 
-**Summary** (from the manifest `description`, 132 characters max; currently 109):
-> A second read for what you write in the browser. Flags generic, unclear and AI-sounding text, on your device.
+**Summary** (from the manifest `description`, 132 characters max; currently 119):
+> Checks whether text in your browser reads as AI-written, and helps fix it. Runs on your device; your text never leaves it.
 
 **Category:** Productivity › Tools. (Productivity › Communication also fits if you want to lead with email.)
 
@@ -31,6 +31,11 @@ WHAT IT CHECKS
 
 It adapts to what you are writing: sales outreach, marketing copy, posts and articles, or documentation.
 
+AI-WRITING CHECK
+Every draft and reviewed page gets an AI score from 0 to 100, with the reasons behind it and a breakdown by paragraph, so you can see which part reads as machine-written. It runs on your device in three depths: Fast (built in: a detector trained on 2025 chatbot writing from GPT, Gemini, Claude and others, no download), Classifier (adds a RoBERTa detector, 126 MB one-time download) and Full (adds two small language models for Binoculars scoring, 399 MB). Your text is never sent anywhere for this. It is tuned for email, posts, marketing, docs and essays; very short timed essays by English learners remain a known weak spot. Accuracy for every tier, including where it fails, is published in the project's evaluation report.
+
+A score is an estimate, not proof of who wrote something. SlopMachine says so on every result.
+
 REVIEW PUBLISHED PAGES
 On a help article or blog post, press "Review this page". You get the same checks, plus an optional page check that says whether the page is complete, understandable and natural-sounding, with the reasons.
 
@@ -48,7 +53,7 @@ Before anything goes to a remote provider, SlopMachine shows exactly what will b
 PRIVATE BY DESIGN
 No account. No server. No analytics. Your text is never stored, and it only leaves your browser when you send it to the AI provider you chose. Keys stay in your browser.
 
-SlopMachine is an editing aid, not an AI detector. It points at writing habits worth fixing; it never claims to know who wrote something.
+No detector can prove who wrote something. SlopMachine shows its evidence and tells you how sure it is, and it is tuned to rarely flag a person's own writing.
 ```
 
 **Graphics** (all in `store/assets/`, regenerate with `npm run store:assets`):
@@ -77,7 +82,7 @@ The screenshots show the real extension. The sites around it are neutral test pa
 ### Single purpose
 
 ```
-SlopMachine reviews text the user writes in the browser, and pages the user chooses to review, for unclear, generic or AI-sounding writing, and helps the user fix it.
+SlopMachine reviews text the user writes in the browser, and pages the user chooses to review, for AI-written, unclear or generic writing, and helps the user fix it.
 ```
 
 ### Permission justifications
@@ -86,6 +91,7 @@ SlopMachine reviews text the user writes in the browser, and pages the user choo
 | --- | --- |
 | `sidePanel` | The review, the fix previews and the settings shortcuts are shown in Chrome's side panel next to the page the user is writing on. |
 | `storage` | Saves the user's settings (enabled sites, rules, phrase lists, chosen AI engine and model) in `chrome.storage.local`, and holds a session-only API key in `chrome.storage.session` so it is forgotten when Chrome closes. Draft text is never stored. |
+| `activeTab` | When the user clicks the toolbar icon, lets the side panel see the current tab's address, so it can offer "Review this PDF" or "Review this Google Doc" for that tab. Nothing is read until the user presses that button. |
 | `scripting` | Registers the extension's own packaged content script only on sites the user turns on in Settings, and injects it into tabs of that site that are already open. No code is fetched from the network. |
 
 **Host permissions.** All of these are optional and requested only when the user turns on the matching feature. The extension requests no host access at install time.
@@ -94,7 +100,8 @@ SlopMachine reviews text the user writes in the browser, and pages the user choo
 | --- | --- |
 | `https://mail.google.com/*` | Requested when the user turns on Gmail, so the content script can read the message box the user is typing in and apply fixes the user approves. |
 | `https://*.linkedin.com/*` | Same, for LinkedIn messages and posts. |
-| `https://*/*` | Used only for the "Other sites" setting: when the user adds a site (for example `https://*.example.com`), Chrome asks for that one site's pattern. The broad pattern is declared because Chrome requires every requestable origin to be listed in the manifest. The extension never asks for `https://*/*` itself. |
+| `https://*/*` | Used only for the "Other sites" setting and for "Review this PDF". When the user adds a site (for example `https://*.example.com`), Chrome asks for that one site's pattern. When the user presses "Review this PDF", Chrome asks for the PDF's own site so the panel can download that one file; the extension removes that access again right after reading it. The broad pattern is declared because Chrome requires every requestable origin to be listed in the manifest. The extension never asks for `https://*/*` itself. |
+| `https://docs.google.com/*` (covered by `https://*/*`) | Requested when the user presses "Review this Google Doc", to download the Doc's plain-text export with the user's own Google session. Read-only; nothing is written to Google. |
 | `https://api.openai.com/*` | Requested when the user adds their own OpenAI key, to list the models that key can use and to send rewrite or review requests the user starts. |
 | `https://api.anthropic.com/*` | Same, for the user's Anthropic key. |
 | `https://generativelanguage.googleapis.com/*` | Same, for the user's Google Gemini key. |
@@ -105,7 +112,7 @@ SlopMachine reviews text the user writes in the browser, and pages the user choo
 ```
 No, I am not using remote code.
 ```
-All JavaScript ships in the package, and the extension pages' CSP is `script-src 'self'; object-src 'self'`. Calls to AI providers send and receive data (text), not code.
+All JavaScript, the WebAssembly runtime (ONNX Runtime Web) and the default detection model (ONNX weights, data) ship in the package. The extension pages' CSP is `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'`: `wasm-unsafe-eval` lets the packaged runtime compile its own `.wasm` file. If the user turns on the Classifier or Full AI-writing check, the extension downloads model weights (ONNX data files, not code) from huggingface.co, pinned to exact commits, and caches them in the browser. No user text is sent in those requests. Calls to AI providers send and receive data (text), not code.
 
 ### Data usage
 
