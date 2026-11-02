@@ -16,6 +16,7 @@ Open `chrome://extensions`, turn on Developer mode, **Load unpacked** → `dist/
 | Command | What it does |
 | --- | --- |
 | `npm run check` | typecheck + unit tests + build |
+| `npm run zip` | same as `check`, then prints the path of the Chrome Web Store package (`release/slopmachine-<version>.zip`) |
 | `npm test` | rule engine, diff, sanitize, prompt, settings and message-schema tests (`node:test`, native TS) |
 | `npm run e2e` | loads the unpacked extension in Chromium: detection, AI score with no network, badge, apply, native undo, stale revision, password/iframe exclusion, zero network; plus BYOK against intercepted OpenAI/Anthropic/Gemini APIs (model lists, auth headers, consent, temperature/thinking per model). Test builds go to the system temp folder, never `dist/` |
 | `npm run store:assets` | regenerates Chrome Web Store graphics in `store/assets/` (5 screenshots, promo tiles, icon) from the real extension, and `store/privacy-policy.html` from `store/privacy-policy.md`. Listing copy, permission justifications and data-use answers are in `store/listing.md` |

@@ -3,13 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
     "typecheck": "tsc --noEmit",
+    "pretest": "node -e \"const [a,b]=process.versions.node.split('.').map(Number);if(a<22||(a===22&&b<18)){console.error('SlopMachine needs Node 22.18 or newer to run .ts tests; this is Node '+process.version+' at '+process.execPath+'. Run: nvm use (see .nvmrc) or put a newer node first on PATH.');process.exit(1)}\"",
     "test": "node --test test/*.test.ts test/*.test.mjs",
     "check": "npm run typecheck && npm test && npm run build",
     "e2e": "node --test --test-concurrency=1 test/e2e/*.e2e.mjs",
+    "zip": "npm run check && node -e \"console.log('Chrome Web Store package: release/slopmachine-' + require('./package.json').version + '.zip')\"",
     "store:assets": "node scripts/store-assets.mjs",
     "detector:fetch": "node scripts/detector/fetch.mjs && python3 scripts/detector/fetch_raid.py && python3 scripts/detector/fetch_modern.py",
     "detector:features": "node scripts/detector/featurize.ts",
