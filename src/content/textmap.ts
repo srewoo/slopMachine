@@ -18,12 +18,18 @@ const SKIP = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT']);
 
 const CELL = new Set(['TD', 'TH']);
 
-/** `visibleOnly` skips CSS-hidden subtrees; used for whole-page reads, too slow to run on every keystroke. */
-export function buildTextMap(root: HTMLElement, exclude?: string, visibleOnly = false): TextMap {
+/**
+ * `page` is for whole-page reads (read-only, so synthetic characters are harmless): it skips
+ * CSS-hidden subtrees and puts a blank line between blocks, so a heading, a table row and a
+ * paragraph never run together into one "paragraph". Editors keep single line breaks.
+ */
+export function buildTextMap(root: HTMLElement, exclude?: string, page = false): TextMap {
   let text = '';
   const segments: Segment[] = [];
   const breakLine = () => {
-    if (text && !text.endsWith('\n')) text += '\n';
+    if (!text) return;
+    if (!text.endsWith('\n')) text += '\n';
+    if (page && !text.endsWith('\n\n')) text += '\n';
   };
 
   const walk = (node: Node): void => {
@@ -36,7 +42,7 @@ export function buildTextMap(root: HTMLElement, exclude?: string, visibleOnly = 
     }
     if (!(node instanceof HTMLElement)) return;
     if (SKIP.has(node.tagName) || node.hidden || (exclude && node.matches(exclude))) return;
-    if (visibleOnly && !node.checkVisibility()) return;
+    if (page && !node.checkVisibility()) return;
     if (node.tagName === 'BR') {
       // A trailing <br> after content in a block is a placeholder, not a line.
       if (!(node === node.parentNode?.lastChild && node.previousSibling)) text += '\n';

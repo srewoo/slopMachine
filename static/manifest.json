@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "SlopMachine",
-  "description": "A second read for what you write in the browser. Flags generic, unclear and AI-sounding text, on your device.",
+  "description": "Checks whether text in your browser reads as AI-written, and helps fix it. Runs on your device; your text never leaves it.",
   "minimum_chrome_version": "116",
   "permissions": [
     "sidePanel",
     "storage",
-    "scripting"
+    "scripting",
+    "activeTab"
   ],
   "optional_host_permissions": [
     "https://mail.google.com/*",
@@ -40,6 +41,6 @@
   },
   "options_page": "options/index.html",
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   }
 }

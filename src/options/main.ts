@@ -1,4 +1,5 @@
 import { VENDOR_IDS } from '../shared/byok/types.ts';
+import { TIER_MB } from '../shared/detect/tiers.ts';
 import { RULES } from '../shared/rules/detectors.ts';
 import {
   coerceSettings, DEFAULT_SETTINGS, loadSettings, storeKey, onSettingsChanged, parseSettings, saveSettings, SITES, updateSettings, type Settings,
@@ -67,9 +68,24 @@ function renderRules(): void {
   $<HTMLTextAreaElement>('customPhrases').value = settings.customPhrases.join('\n');
 }
 
+function renderDetection(): void {
+  for (const r of document.querySelectorAll<HTMLInputElement>('input[name="detection"]')) r.checked = r.value === settings.detection;
+  $('detectionClassifierMb').textContent = `${TIER_MB.classifier} MB`;
+  $('detectionFullMb').textContent = `${TIER_MB.full} MB`;
+}
+
+function wireDetection(): void {
+  $('detectionChoices').addEventListener('change', async (e) => {
+    const value = (e.target as HTMLInputElement).value as Settings['detection'];
+    settings = await updateSettings((s) => ({ ...s, detection: value }));
+    toast(value === 'fast' ? 'Fast check on. Nothing to download.' : 'Saved. The models download the next time the side panel checks a draft.');
+  });
+}
+
 function render(): void {
   renderSites();
   renderRules();
+  renderDetection();
 }
 
 function wireSites(): void {
@@ -157,7 +173,7 @@ function wireData(): void {
       return;
     }
     const origins = (await chrome.permissions.getAll()).origins ?? [];
-    await Promise.all([chrome.storage.local.clear(), chrome.storage.session.clear(), ...VENDOR_IDS.map((v) => storeKey(v, '', false))]);
+    await Promise.all([chrome.storage.local.clear(), chrome.storage.session.clear(), caches.delete('transformers-cache'), ...VENDOR_IDS.map((v) => storeKey(v, '', false))]);
     if (origins.length) await chrome.permissions.remove({ origins }).catch(() => false);
     await syncSites();
     armed = false;
@@ -174,6 +190,7 @@ async function main(): Promise<void> {
   const suggested = parseSitePattern(new URLSearchParams(location.search).get('site') ?? '');
   if (suggested) $<HTMLInputElement>('genericOrigin').value = suggested.slice('https://'.length);
   wireRules();
+  wireDetection();
   wireData();
   const renderProviders = initProviders(() => settings, (s) => { settings = s; });
   onSettingsChanged((s) => {

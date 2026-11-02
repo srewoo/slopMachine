@@ -28,7 +28,10 @@ const common = { define: { __E2E__: String(e2e) }, bundle: true, target: 'chrome
 const builds = [
   { ...common, entryPoints: { content: 'src/content/index.ts' }, format: 'iife', outdir: out },
   { ...common, entryPoints: { sw: 'src/sw/index.ts' }, format: 'esm', outdir: out },
-  { ...common, entryPoints: { 'sidepanel/main': 'src/sidepanel/main.ts', 'options/main': 'src/options/main.ts' }, format: 'esm', outdir: out },
+  { ...common, entryPoints: { 'sidepanel/main': 'src/sidepanel/main.ts', 'options/main': 'src/options/main.ts' }, format: 'esm', outdir: out, splitting: true, chunkNames: 'chunks/[name]-[hash]' },
+  // Deep AI-writing check. Transformers.js asks for ONNX Runtime's WebGPU build (27 MB of wasm);
+  // the plain WebAssembly build is half that and all a 135M-parameter model on CPU needs.
+  { ...common, entryPoints: { 'detect-worker': 'src/detect-worker/index.ts' }, format: 'esm', outdir: out, alias: { 'onnxruntime-web/webgpu': 'onnxruntime-web/wasm' } },
 ];
 
 const copyStatic = async () => {
@@ -36,7 +39,7 @@ const copyStatic = async () => {
   // Test-only build: pre-grant the fixture and provider origins so E2E runs skip Chrome's permission prompt
   // (provider traffic is intercepted by the test; nothing reaches the real APIs).
   if (e2e) {
-    manifest.host_permissions = ['http://127.0.0.1/*', 'http://localhost/*', 'http://*.example/*', 'https://api.openai.com/*', 'https://api.anthropic.com/*', 'https://generativelanguage.googleapis.com/*'];
+    manifest.host_permissions = ['http://127.0.0.1/*', 'http://localhost/*', 'http://*.example/*', 'https://*.example/*', 'https://docs.google.com/*', 'https://api.openai.com/*', 'https://api.anthropic.com/*', 'https://generativelanguage.googleapis.com/*'];
   }
   await writeFile(`${out}/manifest.json`, JSON.stringify(manifest, null, 2));
   await cp('src/ui/base.css', `${out}/ui/base.css`);
@@ -46,6 +49,12 @@ const copyStatic = async () => {
   await cp('src/sidepanel/panel.css', `${out}/sidepanel/panel.css`);
   await cp('src/options/options.css', `${out}/options/options.css`);
   await writeIcons(`${out}/icons`);
+  // The fine-tuned detector ships in the package (scripts/detector/finetune.py writes it).
+  await cp('static/models', `${out}/models`, { recursive: true });
+  // ONNX Runtime loads its wasm and glue module at run time; extensions may only run packaged code.
+  for (const f of ['ort-wasm-simd-threaded.wasm', 'ort-wasm-simd-threaded.mjs']) await cp(`node_modules/onnxruntime-web/dist/${f}`, `${out}/ort/${f}`);
+  // pdf.js parses PDFs in a worker, which must be a packaged file.
+  await cp('node_modules/pdfjs-dist/build/pdf.worker.min.mjs', `${out}/pdf/pdf.worker.min.mjs`);
   await cp('THIRD_PARTY_NOTICES.md', `${out}/THIRD_PARTY_NOTICES.md`); // MIT notice for adapted humanizer patterns
 };
 

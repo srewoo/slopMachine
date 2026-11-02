@@ -117,6 +117,8 @@ export async function completeOpenAICompatible(ep: Endpoint, task: Task, signal:
         messages: [{ role: 'system', content: task.system }, { role: 'user', content: task.user }],
       }),
     });
+    // A 404 from a local server almost always means the model isn't pulled there; say which one.
+    if (res.status === 404 && ep.model) throw new ProviderError(`${ep.label} has no model named “${ep.model}”. Pick one it has in Settings.`);
     if (!res.ok) throw new ProviderError(statusMessage(res.status, ep.label));
     const body: unknown = await res.json();
     const content = (body as { choices?: { message?: { content?: unknown } }[] }).choices?.[0]?.message?.content;
@@ -127,8 +129,8 @@ export async function completeOpenAICompatible(ep: Endpoint, task: Task, signal:
   }
 }
 
-/** Connection test: lists models. Sends no draft text. */
-export async function testEndpoint(ep: Endpoint): Promise<string> {
+/** Connection test: lists the server's models. Sends no draft text. */
+export async function testEndpoint(ep: Endpoint): Promise<{ readonly message: string; readonly models: readonly string[] }> {
   try {
     const res = await fetch(`${ep.baseUrl.replace(/\/$/, '')}/models`, {
       headers: headers(ep.key), credentials: 'omit', signal: AbortSignal.timeout(10_000),
@@ -136,8 +138,8 @@ export async function testEndpoint(ep: Endpoint): Promise<string> {
     if (!res.ok) throw new ProviderError(statusMessage(res.status, ep.label));
     const body = (await res.json()) as { data?: { id?: unknown }[] };
     const ids = (body.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string');
-    if (ep.model && ids.length && !ids.includes(ep.model)) return `Connected, but “${ep.model}” isn't in the model list. Available: ${ids.slice(0, 5).join(', ')}`;
-    return `Connected. ${ids.length} model${ids.length === 1 ? '' : 's'} available.`;
+    if (ep.model && ids.length && !ids.includes(ep.model)) return { message: `Connected, but “${ep.model}” isn't on this server.`, models: ids };
+    return { message: `Connected. ${ids.length} model${ids.length === 1 ? '' : 's'} available.`, models: ids };
   } catch (e) {
     throw toProviderError(e, ep.label);
   }

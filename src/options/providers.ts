@@ -66,7 +66,16 @@ export function initProviders(get: () => Settings, set: (s: Settings) => void): 
     }
     report('localResult', 'Testing…', 'ok');
     try {
-      report('localResult', await testEndpoint({ label: 'Your local model', baseUrl: s.local.baseUrl, model: s.local.model }), 'ok');
+      const { message, models } = await testEndpoint({ label: 'Your local model', baseUrl: s.local.baseUrl, model: s.local.model });
+      $('localModels').replaceChildren(...models.map((m) => new Option(m, m)));
+      // The configured model isn't on this server (often the default name): switch to one it has.
+      if (models.length && !models.includes(s.local.model)) {
+        const pick = models[0]!;
+        await save((cur) => ({ ...cur, local: { ...cur.local, model: pick } }));
+        $<HTMLInputElement>('localModel').value = pick;
+        return report('localResult', `${message} Switched to “${pick}”${models.length > 1 ? `; ${models.length - 1} more in the model list` : ''}.`, 'ok');
+      }
+      report('localResult', message, 'ok');
     } catch (e) {
       report('localResult', e instanceof ProviderError ? e.message : 'The test failed.', 'error');
     }

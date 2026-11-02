@@ -29,18 +29,55 @@ const SUMMARY: Readonly<Record<Family, string>> = {
   staging: 'some sentences stage a point instead of making it',
   generic: 'some phrases could fit any company',
   specificity: 'a claim or the ask is vague',
-  structure: 'the rhythm is a little uniform',
+  structure: 'the rhythm or layout feels formulaic',
   paste: 'it was pasted and not edited yet',
 };
 
 const SEVERITY_LABELS = { critical: 'Fix first', warning: 'Worth a look', info: 'Minor' } as const;
 
+/** Categories every draft is checked for; "paste" only shows when it fired (it depends on how the text arrived). */
+const CHECKED: readonly Family[] = ['placeholder', 'leftovers', 'staging', 'generic', 'specificity', 'structure'];
+
 function summarize(byFamily: Readonly<Record<string, number>>): string {
+  const flagged = CHECKED.filter((f) => byFamily[f]! > 0).length + (byFamily['paste']! > 0 ? 1 : 0);
+  const clear = CHECKED.length - CHECKED.filter((f) => byFamily[f]! > 0).length;
+  if (!flagged) return `All ${CHECKED.length} checks are clear.`;
   const top = (Object.entries(byFamily) as [Family, number][]).filter(([, p]) => p > 0).sort((a, b) => b[1] - a[1]);
-  if (!top.length) return 'Nothing stands out. It reads like a person wrote it for this reader.';
-  const parts = top.slice(0, 2).map(([f]) => SUMMARY[f]);
-  const text = parts.join(', and ');
-  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+  const lead = SUMMARY[top[0]![0]];
+  return `${flagged} ${flagged === 1 ? 'check needs' : 'checks need'} a look, ${clear} ${clear === 1 ? 'is' : 'are'} clear. Biggest: ${lead}.`;
+}
+
+/** Plain names for issue kinds, with how often each appears; others fall back to the issue's own title. */
+const KIND: Readonly<Record<string, (n: number) => string>> = {
+  dashes: (n) => `long dashes used ${n} ${n === 1 ? 'time' : 'times'}`,
+  'label-template': () => 'the same labels repeat',
+  'bold-labels': () => 'bold labels on every item',
+  'wall-of-text': (n) => `${n} long ${n === 1 ? 'paragraph' : 'paragraphs'}`,
+  'uniform-length': () => 'sentences all the same length',
+  'repeated-opening': () => 'sentences opening the same way',
+  bullets: () => 'too many bullet points',
+  triads: (n) => `lists of three, ${n} times`,
+  qualifiers: (n) => `stacked hedges, ${n} times`,
+  phrase: (n) => `${n} stock ${n === 1 ? 'phrase' : 'phrases'}`,
+  placeholder: (n) => `${n} template ${n === 1 ? 'gap' : 'gaps'}`,
+  'numeric-claim': (n) => `${n} ${n === 1 ? 'number' : 'numbers'} without a source`,
+  'vague-cta': () => 'a vague ask',
+};
+
+/** One row per category: "Clear", or the kinds of issue found and how often, in plain words. */
+function checklist(a: Ready['analysis']): HTMLElement[] {
+  const families = [...CHECKED, ...(a.byFamily.paste > 0 ? ['paste' as const] : [])];
+  return families.map((f) => {
+    const found = a.issues.filter((i) => i.family === f);
+    const kinds = new Map<string, Issue[]>();
+    for (const i of found) kinds.set(i.ruleId, [...(kinds.get(i.ruleId) ?? []), i]);
+    const parts = [...kinds.entries()].map(([id, list]) => KIND[id]?.(list.length) ?? list[0]!.title.charAt(0).toLowerCase() + list[0]!.title.slice(1));
+    const row = h('li', { 'data-state': found.length ? 'found' : 'clear' }, h('span', { class: 'check-name' }, FAMILY_LABELS[f]));
+    row.append(found.length
+      ? h('span', { class: 'check-detail' }, h('strong', {}, 'Needs a look: '), `${parts.join(', ')}. Details below.`)
+      : h('span', { class: 'check-detail' }, 'Clear'));
+    return row;
+  });
 }
 
 function readTime(words: number): string {
@@ -64,9 +101,7 @@ export function renderScore(s: Ready): void {
     seg.style.width = `${p}%`;
     return seg;
   }));
-  $('breakdown').replaceChildren(...families.flatMap(([f, p], i) => [i ? ' · ' : '', h('span', { class: 'nw' }, `${FAMILY_LABELS[f]} ${p}`)]));
-  const sum = families.reduce((t, [, p]) => t + p, 0);
-  if (sum > 100) $('breakdown').append(' · ', h('span', { class: 'nw' }, `${sum} in total, capped at 100`));
+  $('checks').replaceChildren(...checklist(a));
   $('meta').textContent = `${a.wordCount} words · ${readTime(a.wordCount)}`;
   $('truncated').hidden = !s.truncated;
   $('belowThreshold').hidden = s.eligible;
@@ -183,7 +218,10 @@ export function renderDiff(ops: readonly DiffOp[], mode: DiffMode): void {
 }
 
 /** Empty, unsupported and first-run states: a title, one sentence, and at most one action. */
-export function showEmpty(title: string, body: string, action?: { label: string; run: () => void }): void {
+export interface EmptyAction { readonly label: string; readonly run: () => void }
+
+/** `more`: secondary actions shown as quiet links under the main one. */
+export function showEmpty(title: string, body: string, action?: EmptyAction, more: readonly EmptyAction[] = []): void {
   $('ready').hidden = true;
   $('empty').hidden = false;
   $('emptyTitle').textContent = title;
@@ -194,6 +232,13 @@ export function showEmpty(title: string, body: string, action?: { label: string;
     btn.textContent = action.label;
     btn.onclick = action.run;
   }
+  const box = $('emptyMore');
+  box.hidden = !more.length;
+  box.replaceChildren(...more.map((a) => {
+    const b = h('button', { class: 'btn-quiet', type: 'button' }, a.label);
+    b.addEventListener('click', a.run);
+    return b;
+  }));
 }
 
 /** Copies to the clipboard; returns the line to show the user. */

@@ -22,6 +22,8 @@ html { scroll-padding-bottom: 96px; }
 /* Empty / unsupported states */
 .empty { display: grid; gap: 8px; padding-top: 24px; max-width: 34ch; }
 .empty .btn { justify-self: start; margin-top: 8px; }
+.empty-more { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0; }
+.empty-more .btn-quiet { min-height: 32px; padding: 0; color: var(--ink); text-decoration-color: currentColor; }
 
 /* Score: a number, a word, one sentence. The bar explains the number as a sum. */
 .score { --tone: var(--ink-2); }
@@ -46,7 +48,13 @@ html { scroll-padding-bottom: 96px; }
 .bar { display: flex; gap: 2px; height: 4px; margin: 16px 0 8px; border-radius: 2px; background: var(--surface); overflow: hidden; }
 .bar span { background: var(--tone); }
 .bar span:nth-child(even) { opacity: 0.7; }
-.breakdown { margin-bottom: 2px; }
+.checks { display: grid; gap: 4px; margin: 4px 0 8px; padding: 0; list-style: none; font-size: var(--fs-cap); }
+.checks li { display: grid; grid-template-columns: 9.5em 1fr; gap: 8px; align-items: baseline; }
+.check-name { color: var(--ink-2); }
+.checks [data-state="clear"] .check-detail { color: var(--low); }
+.checks [data-state="found"] .check-name { color: var(--ink); font-weight: 600; }
+.checks [data-state="found"] .check-detail { color: var(--ink); }
+.checks [data-state="found"] .check-detail strong { color: var(--review); font-weight: 600; }
 .score.is-checking .score-num, .score.is-checking .bar { opacity: 0.45; transition: opacity 160ms; }
 .ai-overall { margin-top: 6px; color: var(--ink-2); }
 .ai-overall::before { content: "AI: "; color: var(--ink); font-weight: 600; }
@@ -162,3 +170,34 @@ html { scroll-padding-bottom: 96px; }
   .diff ins { background: Highlight; color: HighlightText; }
   .bar span { background: CanvasText; }
 }
+
+/* AI-writing check */
+.authorship { --tone: var(--ink-2); margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--rule); }
+.authorship[data-band="ai"] { --tone: var(--high); }
+.authorship[data-band="unclear"], .authorship[data-band="lean"] { --tone: var(--review); }
+.authorship[data-band="human"] { --tone: var(--low); }
+.auth-line { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 2px; }
+.auth-band { margin-left: 12px; }
+.auth-num { font-size: 28px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.1; }
+.auth-band { color: var(--tone); font-weight: 600; }
+.auth-bar { height: 4px; margin: 12px 0 8px; border-radius: 2px; background: var(--surface); overflow: hidden; }
+.auth-bar span { display: block; height: 100%; background: var(--tone); transition: width 200ms; }
+.auth-reasons { display: grid; gap: 4px; margin: 10px 0 0; padding: 0; list-style: none; font-size: var(--fs-cap); }
+.auth-reasons li { padding-left: 12px; }
+.auth-reasons .lean-head { margin-top: 6px; padding-left: 0; font-weight: 600; }
+.auth-reasons .lean-head[data-lean="ai"] { color: var(--high); }
+.auth-reasons .lean-head[data-lean="human"] { color: var(--low); }
+.auth-sub { margin-top: 14px; }
+.auth-passages { display: grid; gap: 2px; margin: 6px 0 0; padding: 0; list-style: none; }
+.passage { --tone: var(--ink-2); display: grid; grid-template-columns: 3.2em 1fr; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-left: 3px solid var(--tone); border-radius: 0 var(--r-control) var(--r-control) 0; background: none; color: var(--ink); font: inherit; font-size: var(--fs-cap); text-align: left; cursor: pointer; }
+.passage:hover, .passage:focus-visible { background: var(--surface); }
+.passage[data-band="ai"] { --tone: var(--high); }
+.passage[data-band="unclear"], .passage[data-band="lean"] { --tone: var(--review); }
+.passage[data-band="human"] { --tone: var(--low); }
+.passage-pct { color: var(--tone); font-weight: 600; }
+.passage-text { overflow-wrap: anywhere; color: var(--ink-2); }
+.auth-opinion { margin-top: 12px; font-size: var(--fs-cap); color: var(--ink-2); }
+.auth-opinion::before { content: "Second opinion: "; color: var(--ink); font-weight: 600; }
+.auth-status { margin-top: 12px; }
+.auth-status .btn-quiet { min-height: 24px; padding: 0; color: var(--ink); text-decoration-color: currentColor; }
+.auth-contrast { margin-top: 8px; color: var(--ink-2); }

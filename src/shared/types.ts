@@ -72,7 +72,7 @@ export const FAMILY_LABELS: Readonly<Record<Family, string>> = {
   staging: 'Staged phrasing',
   generic: 'Stock phrases',
   specificity: 'Vague claims',
-  structure: 'Rhythm',
+  structure: 'Rhythm and layout',
   paste: 'Pasted, not edited',
 };
 
